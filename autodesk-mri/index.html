@@ -121,7 +121,13 @@ section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.
 .sec-map .legend i.direct{border-color:var(--e-direct)} .sec-map .legend i.split{border-color:var(--e-split)}
 .sec-map .legend i.lookup{border-color:var(--e-lookup)} .sec-map .legend i.key{border-color:var(--e-key);border-top-style:dashed}
 .sec-map .legend .const{width:13px;height:13px;border-radius:4px;border:0;background:var(--e-const)}
-.sec-map .canvas{position:relative;min-width:900px;display:flex;gap:clamp(34px,5vw,74px);align-items:flex-start;padding:10px 6px 6px}
+.sec-map .canvas{position:relative;min-width:1000px;display:flex;gap:clamp(22px,2.5vw,36px);align-items:flex-start;padding:10px 6px 6px}
+.sec-map .grp{--x:var(--muted);display:flex;flex-direction:column;gap:10px;padding:10px 12px 12px;border:1.5px dashed color-mix(in srgb,var(--x) 45%,transparent);border-radius:14px;background:color-mix(in srgb,var(--x) 5%,transparent)}
+.sec-map .grp.acc{--x:var(--acc)} .sec-map .grp.mri{--x:var(--mri)}
+.sec-map .grp-h{display:flex;align-items:baseline;gap:8px}
+.sec-map .grp-h .gn{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--x)}
+.sec-map .grp-h .gs{font-size:11.5px;color:var(--muted)}
+.sec-map .grp-cols{display:flex;gap:clamp(26px,3vw,46px);align-items:flex-start}
 .sec-map .col{display:flex;flex-direction:column;gap:28px;flex:0 0 auto}
 .sec-map svg.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .sec-map svg.edges path{fill:none;stroke-width:2;opacity:.85;transition:opacity .12s,stroke-width .12s}
@@ -192,7 +198,8 @@ section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.
 .shots .stepper button.all{border-radius:8px}
 .shots .stepper .cap{flex:1 1 220px;min-width:0;font-size:13px;color:var(--muted)}
 .shots .stepper .cap b{color:var(--ink)}
-.shots .stack{position:relative;display:grid}
+.shots .stack{position:relative;display:grid;align-items:start}
+.sec-flow .stage:not(.collapsed):has(.shots){grid-column:2 / -1 !important}
 .shots figure{margin:0;display:grid;gap:4px;min-width:0}
 .shots .frame{position:relative;container-type:inline-size;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
 .shots img{display:block;width:100%;height:auto}
@@ -200,7 +207,7 @@ section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.
 .shots .ov{position:absolute;display:flex;align-items:center;padding:0 .3em;background:#fff;color:#222;font-family:"Segoe UI","Noto Sans",system-ui,sans-serif;white-space:nowrap;overflow:hidden;line-height:1}
 .shots .bx{position:absolute;border:2px solid var(--acc);border-radius:4px;opacity:0;transition:opacity .15s;pointer-events:none}
 .shots .bx.on{opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 22%,transparent)}
-.shots .rail{display:flex;justify-content:center;gap:10px;padding:14px 0}
+.shots .rail{display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:40px}
 .shots .rail button{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);background:var(--panel);color:var(--muted);font:600 11px var(--font);cursor:pointer;position:relative;z-index:1}
 .shots .rail button.on{border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 18%,transparent)}
 .shots svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
@@ -503,7 +510,15 @@ const canvas = document.getElementById('canvas');
 const svg = document.getElementById('edges');
 const cols = [];
 TABLES.forEach(t=>{ if(!cols[t.col]){ const c=document.createElement('div'); c.className='col'; cols[t.col]=c; } });
-cols.forEach(c=>canvas.appendChild(c));
+// Group the columns by system so it's obvious which tables are Autodesk and which are MRI.
+[{ cls:'acc', nm:'Autodesk ACC', sb:'what the integration reads', cols:[0,1] },
+ { cls:'mri', nm:'MRI X', sb:'what the integration writes', cols:[2,3] }].forEach(g=>{
+  const el=document.createElement('div'); el.className='grp '+g.cls;
+  el.innerHTML='<div class="grp-h"><span class="gn"></span><span class="gs"></span></div><div class="grp-cols"></div>';
+  el.querySelector('.gn').textContent=g.nm; el.querySelector('.gs').textContent=g.sb;
+  g.cols.forEach(i=>el.querySelector('.grp-cols').appendChild(cols[i]));
+  canvas.appendChild(el);
+});
 
 const fieldEls = {};
 TABLES.forEach(t=>{
@@ -787,18 +802,18 @@ accordion([...document.querySelectorAll('section.sec-map, section.sec-flow, sect
 })();
 </script>
 <script>
-// Field walkthrough per stage: the source system's screen on top, the target's below, and a numbered step for each
+// Field walkthrough per stage: the source system's screen on the left, the target's on the right, and a numbered step for each
 // field the integration maps. The active field is boxed on both screens and joined through the step rail.
 // Screens are real UI from our own test environments (Autodesk test hub, MRI "Calance US" demo database), and every
 // value in a boxed field is a made-up overlay, so no client data appears.
 // Box coordinates are pixels in the cropped image (img/shots/), converted to percentages so they scale.
 // Fields per screen: id: [x, y, w, h, overlay text] (text optional). Steps: [caption, source ids, target ids].
 const SHOTS = {
-  1: { src: { img: 'img/shots/s1-mri-vendor.png', w: 940, h: 590, mw: 620, fs: 13, cap: 'MRI · Vendors, Address and General', f: {
+  1: { src: { img: 'img/shots/s1-mri-vendor.png', w: 940, h: 590, fs: 13, cap: 'MRI · Vendors, Address and General', f: {
          id: [129, 58, 96, 24, '000482'], name: [129, 88, 345, 23, 'Summit Ridge Concrete'],
          addr: [155, 264, 288, 24, '2150 Quarry Rd'], city: [155, 322, 288, 23, 'Boise'], state: [155, 351, 81, 23, 'ID'],
          zip: [299, 351, 144, 23, '83702'], phone: [155, 495, 288, 24, '(208) 555-0147'], foreign: [151, 410, 24, 22] } },
-       dst: { img: 'img/shots/s1-acc-company.png', w: 600, h: 660, mw: 420, fs: 14, cap: 'Autodesk · Add company', f: {
+       dst: { img: 'img/shots/s1-acc-company.png', w: 600, h: 660, fs: 14, cap: 'Autodesk · Add company', f: {
          erp: [24, 603, 552, 36, '000482'], name: [24, 124, 520, 36, 'Summit Ridge Concrete'],
          address: [24, 444, 552, 36, '2150 Quarry Rd, Boise, ID 83702'], phone: [24, 524, 552, 34, '+1 (208) 555-0147'],
          country: [24, 364, 520, 36, 'United States'] } },
@@ -807,35 +822,35 @@ const SHOTS = {
                ['Address, city, state, zip → Address', 'addr city state zip', 'address'],
                ['Phone → Phone', 'phone', 'phone'],
                ['No foreign country → Country (config default)', 'foreign', 'country']] },
-  2: { src: { img: 'img/shots/s2-mri-job.png', w: 960, h: 260, mw: 640, fs: 13, cap: 'MRI · Job Maintenance', f: {
+  2: { src: { img: 'img/shots/s2-mri-job.png', w: 960, h: 260, fs: 13, cap: 'MRI · Job Maintenance', f: {
          code: [124, 53, 105, 24, '250410'], desc: [373, 53, 274, 24, 'Riverside Medical Office'] } },
-       dst: { img: 'img/shots/s2-acc-project.png', w: 601, h: 370, mw: 420, fs: 14, cap: 'Autodesk · Create project', f: {
+       dst: { img: 'img/shots/s2-acc-project.png', w: 601, h: 370, fs: 14, cap: 'Autodesk · Create project', f: {
          number: [25, 177, 552, 35, '250410'], name: [25, 101, 552, 35, 'Riverside Medical Office'] } },
        steps: [['Job Code → Project number (the match key)', 'code', 'number'],
                ['Description → Project name', 'desc', 'name']] },
-  3: { src: { img: 'img/shots/s3-acc-budget.png', w: 980, h: 140, mw: 640, fs: 13, cap: 'Autodesk · Budget, one budget code', f: {
+  3: { src: { img: 'img/shots/s3-acc-budget.png', w: 430, h: 140, fs: 13, cap: 'Autodesk · Budget, one budget code', f: {
          code: [14, 112, 140, 24, '1-03-100-M'], name: [160, 112, 255, 24, 'Concrete Materials'] } },
-       dst: { img: 'img/shots/s3-mri-chart.png', w: 1120, h: 188, mw: 640, fs: 13, cap: 'MRI · Job Maintenance, Interface Chart (PMJC_Map)', f: {
+       dst: { img: 'img/shots/s3-mri-chart.png', w: 1120, h: 188, fs: 13, cap: 'MRI · Job Maintenance, Interface Chart (PMJC_Map)', f: {
          entity: [43, 39, 141, 21, '012'], phase: [187, 39, 172, 21, '1'], list: [362, 39, 141, 21, 'AIA'],
          cost: [506, 39, 138, 21, '03-100'], cname: [647, 39, 264, 21, 'Concrete Materials'], acct: [914, 39, 196, 21, '25-000-1410'] } },
        steps: [['Phase part of the budget code → Phase Code', 'code', 'phase'],
                ['Middle parts (major-minor) → Cost Code', 'code', 'cost'],
                ['Budget name → Code Name', 'name', 'cname'],
                ['Phase + cost code look up entity, cost list and GL account in the interface chart', 'code', 'entity list acct']] },
-  4: { src: { img: 'img/shots/s3-acc-budget.png', w: 980, h: 140, mw: 640, fs: 13, cap: 'Autodesk · Budget', f: {
+  4: { src: { img: 'img/shots/s4-acc-budget.png', w: 710, h: 140, fs: 13, cap: 'Autodesk · Budget', f: {
          code: [14, 112, 140, 24, '1-03-100-M'], amt: [580, 112, 126, 24, '125,000.00'] } },
-       dst: { img: 'img/shots/s4-mri-budget.png', w: 1180, h: 225, mw: 640, fs: 13, cap: 'MRI · Job Maintenance, Budget', f: {
+       dst: { img: 'img/shots/s4-mri-budget.png', w: 1180, h: 225, fs: 13, cap: 'MRI · Job Maintenance, Budget', f: {
          phase: [731, 193, 143, 22, '1'], entity: [597, 193, 133, 22, '012'], start: [875, 193, 151, 22, '202604'],
          end: [1027, 193, 151, 22, '202612'], desc: [192, 193, 404, 22, 'Riverside Medical Office'] } },
        steps: [['Phase part of the budget code → Phase Code', 'code', 'phase'],
                ['Entity comes from the interface chart for that phase + cost code', 'code', 'entity'],
                ['Budget periods: the current period through December', '', 'start end'],
                ['Budget description = the job description', '', 'desc']] },
-  5: { src: { img: 'img/shots/s5-acc-contract.png', w: 632, h: 1060, mw: 400, fs: 14, cap: 'Autodesk · Contract', f: {
+  5: { src: { img: 'img/shots/s5-acc-contract.png', w: 632, h: 1060, fs: 14, cap: 'Autodesk · Contract', f: {
          code: [174, 154, 436, 36, 'SC-001'], desc: [174, 246, 436, 64, 'Foundations and slab'],
          supplier: [174, 650, 400, 36, 'Summit Ridge Concrete'], line: [58, 1022, 100, 24, '1-03-100-M'],
          lname: [163, 1022, 75, 24, 'Footings'], amt: [462, 1022, 76, 24, '48,500.00'] } },
-       dst: { img: 'img/shots/s5-mri-contract.png', w: 1300, h: 290, mw: 640, fs: 13, cap: 'MRI · Contract, Order Details', f: {
+       dst: { img: 'img/shots/s5-mri-contract.png', w: 1300, h: 290, fs: 13, cap: 'MRI · Contract, Order Details', f: {
          number: [157, 77, 159, 24, '250410-SC-001'], vendor: [157, 106, 159, 24, '000482'],
          order: [80, 258, 112, 24, '250410-SC-001'], job: [313, 258, 98, 24, '250410'], entity: [412, 258, 98, 24, '012'],
          phase: [511, 258, 113, 24, '1'], list: [625, 258, 90, 24, 'AIA'], cost: [716, 258, 86, 24, '03-100'],
@@ -860,7 +875,6 @@ const SHOTS = {
     const boxes = { src: {}, dst: {} };
     const fig = side => {
       const d = s[side], f = document.createElement('figure');
-      f.style.maxWidth = d.mw + 'px';
       f.innerHTML = `<div class="frame" style="--k:${100 / d.w}"><img src="${d.img}" alt="${d.cap}" loading="lazy"></div><figcaption>${d.cap}</figcaption>`;
       const fr = f.firstChild;
       Object.entries(d.f).forEach(([id, [x, y, w, h, t]]) => {
@@ -879,6 +893,8 @@ const SHOTS = {
     const rail = document.createElement('div'); rail.className = 'rail';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'links');
     const figs = [fig('src'), fig('dst')];
+    // each screen gets width in proportion to its own, so wide MRI grids and tall Autodesk panels both stay readable
+    stack.style.gridTemplateColumns = `minmax(0,${s.src.w}fr) 52px minmax(0,${s.dst.w}fr)`;
     stack.append(figs[0], rail, figs[1], svg);
     const pills = [], dots = [];
     s.steps.forEach((_, i) => {
@@ -896,23 +912,11 @@ const SHOTS = {
       const rel = el => { const r = el.getBoundingClientRect(); return { l: r.left - r0.left, t: r.top - r0.top, r: r.right - r0.left, b: r.bottom - r0.top }; };
       (cur < 0 ? s.steps.map((_, i) => i) : [cur]).forEach(i => {
         const [, a, b] = s.steps[i], dot = rel(dots[i]), dx = (dot.l + dot.r) / 2, dy = (dot.t + dot.b) / 2;
-        // leave each box by the shortest way out of its screen (up, down or right), so lines don't cut across fields
-        const fs = rel(figs[0].firstChild), fd = rel(figs[1].firstChild), gs = fs.r + 10, gd = fd.r + 10;
+        // left screen -> rail: out of the box's right edge, along to the rail, then into the dot; mirrored on the right
+        const xl = dx - 16, xr = dx + 16;
         let d = '';
-        ids(a).forEach(id => {
-          const q = rel(boxes.src[id]), cx = (q.l + q.r) / 2, cy = (q.t + q.b) / 2;
-          const out = Math.min(fs.r - q.r, q.t - fs.t, fs.b - q.b);
-          d += out === fs.b - q.b ? `M${cx} ${q.b}V${dy}H${dx}`
-             : out === q.t - fs.t ? `M${cx} ${q.t}V${fs.t - 8}H${gs}V${dy}H${dx}`
-             : `M${q.r} ${cy}H${gs}V${dy}H${dx}`;
-        });
-        ids(b).forEach(id => {
-          const q = rel(boxes.dst[id]), cx = (q.l + q.r) / 2, cy = (q.t + q.b) / 2;
-          const out = Math.min(fd.r - q.r, q.t - fd.t, fd.b - q.b);
-          d += out === q.t - fd.t ? `M${dx} ${dy}H${cx}V${q.t}`
-             : out === fd.b - q.b ? `M${dx} ${dy}H${gd}V${fd.b + 8}H${cx}V${q.b}`
-             : `M${dx} ${dy}H${gd}V${cy}H${q.r}`;
-        });
+        ids(a).forEach(id => { const q = rel(boxes.src[id]), cy = (q.t + q.b) / 2; d += `M${q.r} ${cy}H${xl}V${dy}H${dot.l}`; });
+        ids(b).forEach(id => { const q = rel(boxes.dst[id]), cy = (q.t + q.b) / 2; d += `M${dot.r} ${dy}H${xr}V${cy}H${q.l}`; });
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', d); svg.appendChild(path);
       });
     };
