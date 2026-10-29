@@ -912,11 +912,12 @@ const SHOTS = {
       const rel = el => { const r = el.getBoundingClientRect(); return { l: r.left - r0.left, t: r.top - r0.top, r: r.right - r0.left, b: r.bottom - r0.top }; };
       (cur < 0 ? s.steps.map((_, i) => i) : [cur]).forEach(i => {
         const [, a, b] = s.steps[i], dot = rel(dots[i]), dx = (dot.l + dot.r) / 2, dy = (dot.t + dot.b) / 2;
-        // left screen -> rail: out of the box's right edge, along to the rail, then into the dot; mirrored on the right
+        // lines run along the gap just above each field's row (never through other fields), then out to the rail and into
+        // the dot; fields in the same row share that line like a bracket
         const xl = dx - 16, xr = dx + 16;
         let d = '';
-        ids(a).forEach(id => { const q = rel(boxes.src[id]), cy = (q.t + q.b) / 2; d += `M${q.r} ${cy}H${xl}V${dy}H${dot.l}`; });
-        ids(b).forEach(id => { const q = rel(boxes.dst[id]), cy = (q.t + q.b) / 2; d += `M${dot.r} ${dy}H${xr}V${cy}H${q.l}`; });
+        ids(a).forEach(id => { const q = rel(boxes.src[id]), cx = (q.l + q.r) / 2, gy = q.t - 4; d += `M${cx} ${q.t}V${gy}H${xl}V${dy}H${dot.l}`; });
+        ids(b).forEach(id => { const q = rel(boxes.dst[id]), cx = (q.l + q.r) / 2, gy = q.t - 4; d += `M${dot.r} ${dy}H${xr}V${gy}H${cx}V${q.t}`; });
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', d); svg.appendChild(path);
       });
     };
