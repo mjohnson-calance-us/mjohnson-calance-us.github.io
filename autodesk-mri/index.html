@@ -184,17 +184,27 @@ section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.
 .dec-legend svg{width:40px;height:22px;flex:0 0 auto;overflow:visible}
 .sec-flow .dec{border-top:1px solid var(--line);margin:0 12px 10px;padding-top:8px}
 .sec-flow .stage.collapsed .dec,.sec-flow .stage.collapsed .shots{display:none}
-.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:0 12px 10px;padding-top:8px;border-top:1px solid var(--line)}
+.shots{margin:0 12px 10px;padding-top:8px;border-top:1px solid var(--line);display:grid;gap:8px}
+.shots .sh-h{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.shots .stepper{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.shots .stepper button{font:inherit;font-size:13px;font-weight:600;min-width:30px;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.shots .stepper button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.shots .stepper button.all{border-radius:8px}
+.shots .stepper .cap{flex:1 1 220px;min-width:0;font-size:13px;color:var(--muted)}
+.shots .stepper .cap b{color:var(--ink)}
+.shots .stack{position:relative;display:grid}
 .shots figure{margin:0;display:grid;gap:4px;min-width:0}
-.shots .frame{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--chip)}
+.shots .frame{position:relative;container-type:inline-size;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
 .shots img{display:block;width:100%;height:auto}
 .shots figcaption{font-size:11px;color:var(--muted)}
-.shots .spot{position:absolute;border:1.5px solid color-mix(in srgb,var(--phase) 55%,transparent);border-radius:4px;cursor:help;transition:background .12s,border-color .12s,box-shadow .12s}
-.shots.focus .spot{border-color:color-mix(in srgb,var(--phase) 20%,transparent)}
-.shots .spot.hot{border:2px solid var(--phase);background:color-mix(in srgb,var(--phase) 16%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--phase) 25%,transparent)}
-.shots .spot.hot::after{content:attr(data-label);position:absolute;left:0;bottom:100%;margin-bottom:3px;white-space:nowrap;font-size:10.5px;font-weight:700;color:#fff;background:var(--phase);padding:1px 6px;border-radius:4px}
-.sec-flow .io > span.linked{cursor:help}
-.sec-flow .io > span.hot{background:color-mix(in srgb,var(--phase) 14%,transparent);border-radius:4px}
+.shots .ov{position:absolute;display:flex;align-items:center;padding:0 .3em;background:#fff;color:#222;font-family:"Segoe UI","Noto Sans",system-ui,sans-serif;white-space:nowrap;overflow:hidden;line-height:1}
+.shots .bx{position:absolute;border:2px solid var(--acc);border-radius:4px;opacity:0;transition:opacity .15s;pointer-events:none}
+.shots .bx.on{opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 22%,transparent)}
+.shots .rail{display:flex;justify-content:center;gap:10px;padding:14px 0}
+.shots .rail button{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);background:var(--panel);color:var(--muted);font:600 11px var(--font);cursor:pointer;position:relative;z-index:1}
+.shots .rail button.on{border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 18%,transparent)}
+.shots svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.shots svg.links path{fill:none;stroke:var(--acc);stroke-width:1.6}
 .sec-rc .dec{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0 4px}
 .dec .dec-h{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .dec svg{width:100%;max-width:470px;height:auto;display:block;margin:0 auto}
@@ -217,6 +227,7 @@ section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.
   <header>
     <div class="eyebrow">Design preview · Autodesk ACC · MRI X · AP approval</div>
     <h1>Autodesk–MRI integration map</h1>
+    <p class="lede"><b>Public preview:</b> customer names, people, job and account numbers are replaced with sample values, and the AP approval system is described generically.</p>
     <p class="lede">End-to-end picture for the integration review:</p>
     <ul class="hbul">
       <li>what data moves between systems</li>
@@ -272,6 +283,8 @@ section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.
         <div class="lane-h acc" style="grid-row:1;grid-column:2">Autodesk ACC</div>
         <div class="lane-h mri" style="grid-row:1;grid-column:3">MRI X</div>
         <div class="lane-h nexus" style="grid-row:1;grid-column:4">AP approval</div>
+
+        <!-- Cards 1-5 each get a field walkthrough (screens + numbered steps) from the SHOTS script near the end. -->
 
         <!-- 1 Companies: MRI -> ACC -->
         <div class="no" style="grid-row:2">1</div>
@@ -774,49 +787,153 @@ accordion([...document.querySelectorAll('section.sec-map, section.sec-flow, sect
 })();
 </script>
 <script>
-// Real screens per stage: the source system's screen and the target's, with a box on each field. Hovering a
-// read/write/match row lights up the fields it names on both screens; hovering a box lights up its row.
-// Boxes are percentages of the image (left, top, width, height) so they hold at any width.
-// Images live in img/ next to this page and show UAT test data only.
+// Field walkthrough per stage: the source system's screen on top, the target's below, and a numbered step for each
+// field the integration maps. The active field is boxed on both screens and joined through the step rail.
+// Screens are real UI from our own test environments (Autodesk test hub, MRI "Calance US" demo database), and every
+// value in a boxed field is a made-up overlay, so no client data appears.
+// Box coordinates are pixels in the cropped image (img/shots/), converted to percentages so they scale.
+// Fields per screen: id: [x, y, w, h, overlay text] (text optional). Steps: [caption, source ids, target ids].
 const SHOTS = {
+  1: { src: { img: 'img/shots/s1-mri-vendor.png', w: 940, h: 590, mw: 620, fs: 13, cap: 'MRI · Vendors, Address and General', f: {
+         id: [129, 58, 96, 24, '000482'], name: [129, 88, 345, 23, 'Summit Ridge Concrete'],
+         addr: [155, 264, 288, 24, '2150 Quarry Rd'], city: [155, 322, 288, 23, 'Boise'], state: [155, 351, 81, 23, 'ID'],
+         zip: [299, 351, 144, 23, '83702'], phone: [155, 495, 288, 24, '(208) 555-0147'], foreign: [151, 410, 24, 22] } },
+       dst: { img: 'img/shots/s1-acc-company.png', w: 600, h: 660, mw: 420, fs: 14, cap: 'Autodesk · Add company', f: {
+         erp: [24, 603, 552, 36, '000482'], name: [24, 124, 520, 36, 'Summit Ridge Concrete'],
+         address: [24, 444, 552, 36, '2150 Quarry Rd, Boise, ID 83702'], phone: [24, 524, 552, 34, '+1 (208) 555-0147'],
+         country: [24, 364, 520, 36, 'United States'] } },
+       steps: [['Vendor ID → ERP partner company ID (the match key)', 'id', 'erp'],
+               ['Vendor name → Name', 'name', 'name'],
+               ['Address, city, state, zip → Address', 'addr city state zip', 'address'],
+               ['Phone → Phone', 'phone', 'phone'],
+               ['No foreign country → Country (config default)', 'foreign', 'country']] },
+  2: { src: { img: 'img/shots/s2-mri-job.png', w: 960, h: 260, mw: 640, fs: 13, cap: 'MRI · Job Maintenance', f: {
+         code: [124, 53, 105, 24, '250410'], desc: [373, 53, 274, 24, 'Riverside Medical Office'] } },
+       dst: { img: 'img/shots/s2-acc-project.png', w: 601, h: 370, mw: 420, fs: 14, cap: 'Autodesk · Create project', f: {
+         number: [25, 177, 552, 35, '250410'], name: [25, 101, 552, 35, 'Riverside Medical Office'] } },
+       steps: [['Job Code → Project number (the match key)', 'code', 'number'],
+               ['Description → Project name', 'desc', 'name']] },
+  3: { src: { img: 'img/shots/s3-acc-budget.png', w: 980, h: 140, mw: 640, fs: 13, cap: 'Autodesk · Budget, one budget code', f: {
+         code: [14, 112, 140, 24, '1-03-100-M'], name: [160, 112, 255, 24, 'Concrete Materials'] } },
+       dst: { img: 'img/shots/s3-mri-chart.png', w: 1120, h: 188, mw: 640, fs: 13, cap: 'MRI · Job Maintenance, Interface Chart (PMJC_Map)', f: {
+         entity: [43, 39, 141, 21, '012'], phase: [187, 39, 172, 21, '1'], list: [362, 39, 141, 21, 'AIA'],
+         cost: [506, 39, 138, 21, '03-100'], cname: [647, 39, 264, 21, 'Concrete Materials'], acct: [914, 39, 196, 21, '25-000-1410'] } },
+       steps: [['Phase part of the budget code → Phase Code', 'code', 'phase'],
+               ['Middle parts (major-minor) → Cost Code', 'code', 'cost'],
+               ['Budget name → Code Name', 'name', 'cname'],
+               ['Phase + cost code look up entity, cost list and GL account in the interface chart', 'code', 'entity list acct']] },
+  4: { src: { img: 'img/shots/s3-acc-budget.png', w: 980, h: 140, mw: 640, fs: 13, cap: 'Autodesk · Budget', f: {
+         code: [14, 112, 140, 24, '1-03-100-M'], amt: [580, 112, 126, 24, '125,000.00'] } },
+       dst: { img: 'img/shots/s4-mri-budget.png', w: 1180, h: 225, mw: 640, fs: 13, cap: 'MRI · Job Maintenance, Budget', f: {
+         phase: [731, 193, 143, 22, '1'], entity: [597, 193, 133, 22, '012'], start: [875, 193, 151, 22, '202604'],
+         end: [1027, 193, 151, 22, '202612'], desc: [192, 193, 404, 22, 'Riverside Medical Office'] } },
+       steps: [['Phase part of the budget code → Phase Code', 'code', 'phase'],
+               ['Entity comes from the interface chart for that phase + cost code', 'code', 'entity'],
+               ['Budget periods: the current period through December', '', 'start end'],
+               ['Budget description = the job description', '', 'desc']] },
+  5: { src: { img: 'img/shots/s5-acc-contract.png', w: 632, h: 1060, mw: 400, fs: 14, cap: 'Autodesk · Contract', f: {
+         code: [174, 154, 436, 36, 'SC-001'], desc: [174, 246, 436, 64, 'Foundations and slab'],
+         supplier: [174, 650, 400, 36, 'Summit Ridge Concrete'], line: [58, 1022, 100, 24, '1-03-100-M'],
+         lname: [163, 1022, 75, 24, 'Footings'], amt: [462, 1022, 76, 24, '48,500.00'] } },
+       dst: { img: 'img/shots/s5-mri-contract.png', w: 1300, h: 290, mw: 640, fs: 13, cap: 'MRI · Contract, Order Details', f: {
+         number: [157, 77, 159, 24, '250410-SC-001'], vendor: [157, 106, 159, 24, '000482'],
+         order: [80, 258, 112, 24, '250410-SC-001'], job: [313, 258, 98, 24, '250410'], entity: [412, 258, 98, 24, '012'],
+         phase: [511, 258, 113, 24, '1'], list: [625, 258, 90, 24, 'AIA'], cost: [716, 258, 86, 24, '03-100'],
+         amt: [803, 258, 120, 24, '48,500.00'], ldesc: [1047, 258, 248, 24, 'Footings'] } },
+       steps: [['Job number + contract code → Contract Number', 'code', 'number order'],
+               ['Supplier → Contractor ID (via its ERP partner company ID)', 'supplier', 'vendor'],
+               ['Schedule-of-values budget code → job, entity, phase, cost list, cost code', 'line', 'job entity phase list cost'],
+               ['Line amount → Amount', 'amt', 'amt'],
+               ['Line name → Description', 'lname', 'ldesc']] },
 };
 
 (() => {
   const stages = document.querySelectorAll('.sec-flow .stage');
+  const pct = (v, of) => (v / of * 100) + '%';
+  const ids = str => str ? str.split(' ') : [];
   Object.entries(SHOTS).forEach(([no, s]) => {
     const st = stages[no - 1]; if (!st) return;
-    const rows = [...st.querySelectorAll('.io > span')];
+    const N = s.steps.length;
     const wrap = document.createElement('div'); wrap.className = 'shots';
-    const spotEls = {};
-    [s.from, s.to].forEach(shot => {
-      const fig = document.createElement('figure');
-      fig.innerHTML = `<div class="frame"><img src="${shot.src}" alt="${shot.caption}" loading="lazy"></div><figcaption>${shot.caption}</figcaption>`;
-      const frame = fig.firstChild;
-      shot.spots.forEach(sp => {
-        const [l, t, w, h] = sp.box;
-        const b = document.createElement('span'); b.className = 'spot'; b.dataset.label = sp.label; b.title = sp.label;
-        Object.assign(b.style, { left: l + '%', top: t + '%', width: w + '%', height: h + '%' });
-        frame.appendChild(b); (spotEls[sp.id] = spotEls[sp.id] || []).push(b);
+    wrap.innerHTML = '<span class="sh-h">Field walkthrough · sample values</span><div class="stepper"></div><div class="stack"></div>';
+    const stepper = wrap.querySelector('.stepper'), stack = wrap.querySelector('.stack');
+    const boxes = { src: {}, dst: {} };
+    const fig = side => {
+      const d = s[side], f = document.createElement('figure');
+      f.style.maxWidth = d.mw + 'px';
+      f.innerHTML = `<div class="frame" style="--k:${100 / d.w}"><img src="${d.img}" alt="${d.cap}" loading="lazy"></div><figcaption>${d.cap}</figcaption>`;
+      const fr = f.firstChild;
+      Object.entries(d.f).forEach(([id, [x, y, w, h, t]]) => {
+        if (t != null) {
+          const o = document.createElement('span'); o.className = 'ov'; o.textContent = t;
+          Object.assign(o.style, { left: pct(x + 2, d.w), top: pct(y + 2, d.h), width: pct(w - 4, d.w), height: pct(h - 4, d.h),
+            fontSize: `calc(${d.fs} * var(--k) * 1cqw)` });
+          fr.appendChild(o);
+        }
+        const b = document.createElement('span'); b.className = 'bx';
+        Object.assign(b.style, { left: pct(x - 2, d.w), top: pct(y - 2, d.h), width: pct(w + 4, d.w), height: pct(h + 4, d.h) });
+        fr.appendChild(b); boxes[side][id] = b;
       });
-      wrap.appendChild(fig);
-    });
-    st.insertBefore(wrap, st.querySelector('.dec') || st.querySelector('.foot'));
-
-    const clear = () => { wrap.classList.remove('focus'); st.querySelectorAll('.hot').forEach(e => e.classList.remove('hot')); };
-    const light = (rowIdx) => {
-      clear(); wrap.classList.add('focus');
-      rowIdx.forEach(i => { rows[i]?.classList.add('hot'); (s.rows[i] || []).forEach(id => (spotEls[id] || []).forEach(b => b.classList.add('hot'))); });
+      return f;
     };
-    Object.keys(s.rows).forEach(i => {
-      const r = rows[i]; if (!r) return;
-      r.classList.add('linked');
-      r.addEventListener('mouseenter', () => light([+i])); r.addEventListener('mouseleave', clear);
+    const rail = document.createElement('div'); rail.className = 'rail';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'links');
+    const figs = [fig('src'), fig('dst')];
+    stack.append(figs[0], rail, figs[1], svg);
+    const pills = [], dots = [];
+    s.steps.forEach((_, i) => {
+      const p = document.createElement('button'); p.textContent = i + 1; stepper.appendChild(p); pills.push(p);
+      const d = document.createElement('button'); d.textContent = i + 1; rail.appendChild(d); dots.push(d);
+      p.onclick = d.onclick = () => show(i);
     });
-    Object.entries(spotEls).forEach(([id, els]) => els.forEach(b => {
-      const hits = Object.keys(s.rows).filter(i => s.rows[i].includes(id)).map(Number);
-      b.addEventListener('mouseenter', () => hits.length ? light(hits) : (clear(), wrap.classList.add('focus'), b.classList.add('hot')));
-      b.addEventListener('mouseleave', clear);
-    }));
+    const all = document.createElement('button'); all.className = 'all'; all.textContent = 'Show all'; stepper.appendChild(all);
+    const cap = document.createElement('span'); cap.className = 'cap'; stepper.appendChild(cap);
+    all.onclick = () => show(-1);
+    let cur = 0;
+    const draw = () => {
+      svg.innerHTML = '';
+      const r0 = stack.getBoundingClientRect(); if (!r0.width) return;
+      const rel = el => { const r = el.getBoundingClientRect(); return { l: r.left - r0.left, t: r.top - r0.top, r: r.right - r0.left, b: r.bottom - r0.top }; };
+      (cur < 0 ? s.steps.map((_, i) => i) : [cur]).forEach(i => {
+        const [, a, b] = s.steps[i], dot = rel(dots[i]), dx = (dot.l + dot.r) / 2, dy = (dot.t + dot.b) / 2;
+        // leave each box by the shortest way out of its screen (up, down or right), so lines don't cut across fields
+        const fs = rel(figs[0].firstChild), fd = rel(figs[1].firstChild), gs = fs.r + 10, gd = fd.r + 10;
+        let d = '';
+        ids(a).forEach(id => {
+          const q = rel(boxes.src[id]), cx = (q.l + q.r) / 2, cy = (q.t + q.b) / 2;
+          const out = Math.min(fs.r - q.r, q.t - fs.t, fs.b - q.b);
+          d += out === fs.b - q.b ? `M${cx} ${q.b}V${dy}H${dx}`
+             : out === q.t - fs.t ? `M${cx} ${q.t}V${fs.t - 8}H${gs}V${dy}H${dx}`
+             : `M${q.r} ${cy}H${gs}V${dy}H${dx}`;
+        });
+        ids(b).forEach(id => {
+          const q = rel(boxes.dst[id]), cx = (q.l + q.r) / 2, cy = (q.t + q.b) / 2;
+          const out = Math.min(fd.r - q.r, q.t - fd.t, fd.b - q.b);
+          d += out === q.t - fd.t ? `M${dx} ${dy}H${cx}V${q.t}`
+             : out === fd.b - q.b ? `M${dx} ${dy}H${gd}V${fd.b + 8}H${cx}V${q.b}`
+             : `M${dx} ${dy}H${gd}V${cy}H${q.r}`;
+        });
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', d); svg.appendChild(path);
+      });
+    };
+    const show = i => {
+      cur = i;
+      Object.values(boxes.src).concat(Object.values(boxes.dst)).forEach(b => b.classList.remove('on'));
+      const on = i < 0 ? s.steps.map((_, k) => k) : [i];
+      on.forEach(k => {
+        ids(s.steps[k][1]).forEach(id => boxes.src[id].classList.add('on'));
+        ids(s.steps[k][2]).forEach(id => boxes.dst[id].classList.add('on'));
+      });
+      pills.forEach((p, k) => p.classList.toggle('on', k === i));
+      dots.forEach((d, k) => d.classList.toggle('on', on.includes(k)));
+      all.classList.toggle('on', i < 0);
+      cap.innerHTML = i < 0 ? `<b>All ${N} fields</b>` : `<b>${i + 1} of ${N}</b> · ${s.steps[i][0]}`;
+      draw();
+    };
+    st.insertBefore(wrap, st.querySelector('.dec') || st.querySelector('.foot'));
+    new ResizeObserver(draw).observe(stack);
+    stack.querySelectorAll('img').forEach(im => im.addEventListener('load', draw));
+    show(0);
   });
 })();
 </script>
