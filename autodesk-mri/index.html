@@ -189,6 +189,7 @@ section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.
 /* ---------- decision flowcharts (inside each stage card) ---------- */
 .dec-legend svg{width:40px;height:22px;flex:0 0 auto;overflow:visible}
 .sec-flow .dec{border-top:1px solid var(--line);margin:0 12px 10px;padding-top:8px}
+.sec-flow .stage,section.sec-map,section.sec-flow,section.sec-rc{scroll-margin-top:8px}
 .sec-flow .stage.collapsed .dec,.sec-flow .stage.collapsed .shots{display:none}
 .shots{margin:0 12px 10px;padding-top:8px;border-top:1px solid var(--line);display:grid;gap:8px}
 .shots .sh-h{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
@@ -614,7 +615,9 @@ function accordion(items, headOf, chevText, onOpen){
     h.setAttribute('role','button'); h.setAttribute('tabindex','0');
     const set=(el,open)=>{ el.classList.toggle('collapsed',!open); headOf(el)?.setAttribute('aria-expanded',String(open)); };
     set(it,i===0);
-    const t=()=>{ const open=it.classList.contains('collapsed'); items.forEach(o=>set(o,false)); set(it,open); if(open&&onOpen) requestAnimationFrame(onOpen); };
+    // Closing the siblings shifts everything, so bring the opened item's top flush with the viewport.
+    const t=()=>{ const open=it.classList.contains('collapsed'); items.forEach(o=>set(o,false)); set(it,open);
+      if(open){ if(onOpen) requestAnimationFrame(onOpen); setTimeout(()=>it.scrollIntoView({block:'start',behavior:'smooth'}),0); } };
     h.addEventListener('click',t);
     h.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); } });
   });
