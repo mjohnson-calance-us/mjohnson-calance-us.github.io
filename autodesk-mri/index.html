@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Autodesk–MRI Integration Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Light only. Section 1 is a swimlane: system lanes as columns, stages stacked top-to-bottom in
+   run order, each card's arrow = real data direction (coloured by the landing system). Section 2
+   is the field map with SVG edges. Palette is colour-blind-safe (Okabe-Ito / Tol), no green. */
+:root{
+  color-scheme:light;
+  --bg:#eef1f4; --panel:#ffffff; --ink:#141b24; --muted:#55606b; --line:#d2dae2; --chip:#eef2f6;
+  --acc:#0072B2; --mri:#D55E00; --nexus:#8E5BB5; --sage:#B45F06;
+  --create:#0072B2; --createkeep:#D55E00; --phase:#B45F06; --tbd:#6b7480; --gl:#9B2D6B;
+  --head-src:#0072B2; --head-dec:#B45F06; --head-map:#D55E00; --head-tgt:#6A3FA0;
+  --e-direct:#0072B2; --e-split:#C77800; --e-lookup:#AA4499; --e-key:#6b7480; --e-const:#CC79A7;
+  --font:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5}
+.wrap{max-width:1200px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{padding-block:26px 6px;display:grid;gap:7px}
+.eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{margin:0;font-size:clamp(23px,3.6vw,31px);font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.lede{margin:0;color:var(--muted);max-width:76ch}
+header .hbul{margin:4px 0 0;padding-left:20px;display:grid;gap:4px;color:var(--muted)}
+header .hbul li{text-wrap:pretty}
+header .hbul b{color:var(--ink)}
+header .hbul .t{display:inline-block;font-size:.92em;font-weight:700;padding:0 8px;border-radius:999px;line-height:1.55;white-space:nowrap}
+header .hbul .t-src{color:#0072B2;background:rgba(0,114,178,.12);box-shadow:inset 0 0 0 1px rgba(0,114,178,.4)}
+header .hbul .t-code{color:#B45F06;background:rgba(180,95,6,.12);box-shadow:inset 0 0 0 1px rgba(180,95,6,.4)}
+header .hbul .t-line{color:#6A3FA0;background:rgba(106,63,160,.13);box-shadow:inset 0 0 0 1px rgba(106,63,160,.4)}
+header .hbul .t-gl{color:#9B2D6B;background:rgba(155,45,107,.13);box-shadow:inset 0 0 0 1px rgba(155,45,107,.45)}
+header .hbul .op,header .hbul .br{font-family:var(--mono);color:var(--muted);font-weight:600}
+header .hbul .expr{white-space:nowrap}
+@media (max-width:620px){header .hbul .expr{white-space:normal}}
+.sec-title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:30px 0 2px;padding-top:18px;border-top:1px solid var(--line)}
+.sec-title h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.sec-title .n{font-size:12px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+.scroll{overflow-x:auto;overflow-y:hidden;margin:12px 0 10px;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0 2px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.open-note{display:flex;gap:9px;align-items:flex-start;background:color-mix(in srgb,var(--phase) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--phase) 38%,transparent);border-radius:10px;padding:11px 13px;margin:14px 0 2px;font-size:13.5px}
+.open-note b{color:var(--ink)} .open-note .k{color:var(--phase);font-weight:700}
+footer{color:var(--muted);font-size:12.5px;padding-block:14px 40px;max-width:92ch;border-top:1px solid var(--line);margin-top:26px}
+footer code{font-family:var(--mono);background:var(--chip);padding:1px 5px;border-radius:5px}
+
+/* ---------- SECTION 1 · swimlanes ---------- */
+.sec-flow .laneswrap{overflow-x:auto;overflow-y:hidden;padding-bottom:10px;margin:14px 0 8px;-webkit-overflow-scrolling:touch}
+.sec-flow .lanes{display:grid;grid-template-columns:30px repeat(3,minmax(190px,1fr));gap:14px 16px;min-width:840px;align-items:start}
+.sec-flow .lane-h{text-align:center;font-weight:700;font-size:13px;padding:8px;border-radius:9px;background:var(--chip);border:1px solid var(--line);position:sticky;top:0}
+.sec-flow .lane-h.acc{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
+.sec-flow .lane-h.mri{color:var(--mri);box-shadow:inset 0 3px 0 var(--mri)}
+.sec-flow .lane-h.nexus{color:var(--nexus);box-shadow:inset 0 3px 0 var(--nexus)}
+.sec-flow .no{grid-column:1;align-self:start;margin-top:19px;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--bg);
+  font-size:12px;font-weight:700;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.sec-flow .stage{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(10,20,30,.05)}
+.sec-flow .stage.tbd{border-style:dashed}
+.sec-flow .route{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)}
+.sec-flow .route .sys{font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:var(--chip)}
+.sec-flow .route .sys.acc{color:var(--acc)} .sec-flow .route .sys.mri{color:var(--mri)} .sec-flow .route .sys.nexus{color:var(--nexus)}
+.sec-flow .route .mid{flex:1;display:flex;flex-direction:column;align-items:center;gap:0;min-width:0}
+.sec-flow .route .title{font-weight:700;font-size:14px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sec-flow .route .dir{font-size:19px;line-height:1;font-weight:700}
+.sec-flow .route .dir.to-acc{color:var(--acc)} .sec-flow .route .dir.to-mri{color:var(--mri)} .sec-flow .route .dir.to-nexus{color:var(--nexus)}
+.sec-flow .body{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;padding:10px 12px}
+.sec-flow .io{font-size:12px;color:var(--muted);display:grid;gap:2px;align-content:start}
+.sec-flow .io b{color:var(--ink);font-weight:600}
+.sec-flow .io code{font-family:var(--mono);font-size:11px;background:var(--chip);padding:1px 5px;border-radius:5px}
+.sec-flow .meta{display:grid;gap:3px;align-content:start}
+.sec-flow .m{display:flex;gap:7px;font-size:11px;line-height:1.3}
+.sec-flow .m .lab{color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600;font-size:9.5px;flex:0 0 50px;padding-top:1px}
+.sec-flow .m .val{color:var(--ink)} .sec-flow .m .val.sot{font-weight:700}
+.sec-flow .phase-ribbon{display:flex;gap:7px;align-items:flex-start;font-size:11px;line-height:1.35;margin:0 12px 10px;
+  background:color-mix(in srgb,var(--phase) 13%,transparent);border:1px solid color-mix(in srgb,var(--phase) 40%,transparent);
+  color:var(--ink);border-radius:8px;padding:7px 9px}
+.sec-flow .phase-ribbon .flag{color:var(--phase);font-weight:700;white-space:nowrap}
+.sec-flow .foot{margin-top:auto;padding:0 12px 11px}
+.sec-flow .trig{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+.sec-flow .trig.cu{background:color-mix(in srgb,var(--create) 16%,transparent);color:var(--create)}
+.sec-flow .trig.ck{background:color-mix(in srgb,var(--createkeep) 16%,transparent);color:var(--createkeep)}
+.sec-flow .trig.tbd{background:var(--chip);color:var(--tbd)}
+.sec-flow .trig.nx{background:color-mix(in srgb,var(--nexus) 15%,transparent);color:var(--nexus)}
+.sec-flow .sub-h{grid-column:2 / span 3;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--nexus);
+  display:flex;align-items:center;gap:10px;padding-top:6px}
+.sec-flow .sub-h::after{content:"";flex:1;border-top:1px solid color-mix(in srgb,var(--nexus) 35%,transparent)}
+.sec-flow .sub-h span{font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted)}
+.sec-flow .stage.tbd .io,.sec-flow .stage.tbd .meta{opacity:.78}
+.sec-flow .note{display:flex;gap:9px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--sage);
+  border-radius:10px;padding:11px 13px;margin:8px 0 4px;font-size:13.5px;color:var(--muted);max-width:92ch}
+.sec-flow .note b{color:var(--ink)}
+.sec-flow .route{cursor:pointer;user-select:none}
+.sec-flow .route:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.sec-flow .route .chev{flex:0 0 auto;color:var(--muted);font-size:12px;transition:transform .15s}
+.sec-flow .stage:not(.collapsed) .route .chev{transform:rotate(90deg)}
+.sec-flow .stage.collapsed .body,.sec-flow .stage.collapsed .phase-ribbon,.sec-flow .stage.collapsed .foot{display:none}
+.sec-title{cursor:pointer;user-select:none}
+.sec-title:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.sec-title .schev{margin-left:auto;align-self:center;color:var(--muted);font-size:14px;transition:transform .15s}
+section.collapsed .sec-title .schev{transform:rotate(-90deg)}
+section.sec-flow.collapsed > :not(.sec-title),section.sec-map.collapsed > :not(.sec-title),section.sec-rc.collapsed > :not(.sec-title){display:none}
+
+/* ---------- SECTION 2 · field map ---------- */
+.sec-map .example{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0 6px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.sec-map .example .src{font-family:var(--mono);font-weight:600;font-size:16px;background:var(--chip);padding:4px 9px;border-radius:7px}
+.sec-map .example .arr{color:var(--muted)}
+.sec-map .ex-chip{font-family:var(--mono);font-size:13px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);display:inline-flex;gap:7px;align-items:center}
+.sec-map .ex-chip b{font-weight:600}
+.sec-map .ex-chip .lab{font-family:var(--font);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.sec-map .ex-chip.phase{border-color:var(--e-split);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--e-split) 30%,transparent)}
+.sec-map .ex-chip.gl{border-color:var(--gl);color:var(--gl)}
+.sec-map .legend i{width:20px;height:0;border-top-width:2.5px;border-top-style:solid;display:inline-block}
+.sec-map .legend i.direct{border-color:var(--e-direct)} .sec-map .legend i.split{border-color:var(--e-split)}
+.sec-map .legend i.lookup{border-color:var(--e-lookup)} .sec-map .legend i.key{border-color:var(--e-key);border-top-style:dashed}
+.sec-map .legend .const{width:13px;height:13px;border-radius:4px;border:0;background:var(--e-const)}
+.sec-map .canvas{position:relative;min-width:900px;display:flex;gap:clamp(34px,5vw,74px);align-items:flex-start;padding:10px 6px 6px}
+.sec-map .col{display:flex;flex-direction:column;gap:28px;flex:0 0 auto}
+.sec-map svg.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.sec-map svg.edges path{fill:none;stroke-width:2;opacity:.85;transition:opacity .12s,stroke-width .12s}
+.sec-map .canvas.dim svg.edges path{opacity:.12}
+.sec-map .canvas.dim svg.edges path.hot{opacity:1;stroke-width:3}
+.sec-map .tbl{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:230px;box-shadow:0 1px 2px rgba(10,20,30,.05);overflow:hidden}
+.sec-map .tbl.wide{width:248px}
+.sec-map .thead{padding:9px 12px;border-bottom:1px solid var(--line);display:grid;gap:1px}
+.sec-map .thead .nm{font-weight:700;font-size:14px;letter-spacing:.01em}
+.sec-map .thead .sb{font-size:11.5px;color:var(--muted)}
+.sec-map .tbl[data-role]{border-top:3px solid var(--line)}
+.sec-map .tbl.src{border-top-color:var(--head-src)} .sec-map .tbl.src .nm{color:var(--head-src)}
+.sec-map .tbl.dec{border-top-color:var(--head-dec)} .sec-map .tbl.dec .nm{color:var(--head-dec)}
+.sec-map .tbl.map{border-top-color:var(--head-map)} .sec-map .tbl.map .nm{color:var(--head-map)}
+.sec-map .tbl.tgt{border-top-color:var(--head-tgt)} .sec-map .tbl.tgt .nm{color:var(--head-tgt)}
+.sec-map .row{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent);cursor:default;transition:background .12s}
+.sec-map .row:first-of-type{border-top:0}
+.sec-map .row .fn{font-family:var(--mono);font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sec-map .row .meta{margin-left:auto;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.sec-map .row.key .fn::before{content:"\2697 ";color:var(--e-key)}
+.sec-map .row.gl{background:color-mix(in srgb,var(--gl) 10%,transparent)}
+.sec-map .row.gl .fn{color:var(--gl);font-weight:600}
+.sec-map .row.hot{background:color-mix(in srgb,var(--head-src) 12%,transparent)}
+.sec-map .tag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 5px;border-radius:5px;margin-left:auto}
+.sec-map .tag.const{background:color-mix(in srgb,var(--e-const) 18%,transparent);color:var(--e-const)}
+.sec-map .tag.ctx{background:var(--chip);color:var(--muted)}
+.sec-map .tag.gl{background:color-mix(in srgb,var(--gl) 16%,transparent);color:var(--gl)}
+/* ---------- SECTION 3 · reclass trial ---------- */
+.sec-rc .lead2{margin:8px 0 0;color:var(--muted);max-width:82ch;font-size:14.5px}
+.sec-rc .lead2 code,.sec-rc .ex{font-family:var(--mono);font-size:.9em;background:var(--chip);padding:1px 5px;border-radius:5px}
+.sec-rc .steps{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}
+.sec-rc .step{flex:1 1 160px;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:3px}
+.sec-rc .step .n{font-size:9.5px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.sec-rc .step .t{font-weight:700;font-size:14px}
+.sec-rc .step .d{font-size:11.5px;color:var(--muted)}
+.sec-rc .step .safe{color:var(--acc)} .sec-rc .step .opt{color:var(--tbd)}
+.sec-rc .gl{display:grid;gap:10px;margin:12px 0 4px}
+.sec-rc .gl .opt{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.sec-rc .optlab{font-weight:700;font-size:13px;flex:0 0 auto}
+.sec-rc .optlab small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+.sec-rc .acct{font-family:var(--mono);font-size:12px;padding:5px 9px;border-radius:8px;background:var(--chip);border:1px solid var(--line);white-space:nowrap;display:inline-flex;flex-direction:column;gap:1px;align-items:flex-start}
+.sec-rc .acct b{font-weight:600}
+.sec-rc .acct small{color:var(--muted);font-size:10px;font-family:var(--font)}
+.sec-rc .acct.p1{border-color:var(--phase);color:var(--phase)}
+.sec-rc .acct.p2{border-color:var(--mri);color:var(--mri)}
+.sec-rc .acct.clr{border-color:var(--tbd);color:var(--tbd)}
+.sec-rc .fl{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:12px;font-weight:700}
+.sec-rc .fl .neg{color:var(--phase)} .sec-rc .fl .pos{color:var(--mri)} .sec-rc .fl .ar{color:var(--muted);font-size:15px}
+.sec-rc .tail{font-size:12px;color:var(--muted);margin-left:auto;flex:0 0 auto}
+.sec-rc .rcnote{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--muted);margin-top:10px}
+.sec-rc .rcnote b{color:var(--ink)}
+@media (max-width:560px){ header{padding-block:18px 4px} }
+.tip{cursor:help;text-decoration:underline dotted;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);text-underline-offset:2px}
+.sec-flow .io,.sec-flow .meta{gap:0}
+.sec-flow .io > span,.sec-flow .meta > .m{padding:4px 0;border-bottom:1px solid var(--line)}
+.sec-flow .io > span:first-child,.sec-flow .meta > .m:first-child{padding-top:0}
+.sec-flow .io > span:last-child,.sec-flow .meta > .m:last-child{border-bottom:0;padding-bottom:0}
+
+/* ---------- decision flowcharts (inside each stage card) ---------- */
+.dec-legend svg{width:40px;height:22px;flex:0 0 auto;overflow:visible}
+.sec-flow .dec{border-top:1px solid var(--line);margin:0 12px 10px;padding-top:8px}
+.sec-flow .stage.collapsed .dec,.sec-flow .stage.collapsed .shots{display:none}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:0 12px 10px;padding-top:8px;border-top:1px solid var(--line)}
+.shots figure{margin:0;display:grid;gap:4px;min-width:0}
+.shots .frame{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--chip)}
+.shots img{display:block;width:100%;height:auto}
+.shots figcaption{font-size:11px;color:var(--muted)}
+.shots .spot{position:absolute;border:1.5px solid color-mix(in srgb,var(--phase) 55%,transparent);border-radius:4px;cursor:help;transition:background .12s,border-color .12s,box-shadow .12s}
+.shots.focus .spot{border-color:color-mix(in srgb,var(--phase) 20%,transparent)}
+.shots .spot.hot{border:2px solid var(--phase);background:color-mix(in srgb,var(--phase) 16%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--phase) 25%,transparent)}
+.shots .spot.hot::after{content:attr(data-label);position:absolute;left:0;bottom:100%;margin-bottom:3px;white-space:nowrap;font-size:10.5px;font-weight:700;color:#fff;background:var(--phase);padding:1px 6px;border-radius:4px}
+.sec-flow .io > span.linked{cursor:help}
+.sec-flow .io > span.hot{background:color-mix(in srgb,var(--phase) 14%,transparent);border-radius:4px}
+.sec-rc .dec{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0 4px}
+.dec .dec-h{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.dec svg{width:100%;max-width:470px;height:auto;display:block;margin:0 auto}
+:is(.dec,.dec-legend) svg .nd{fill:var(--panel);stroke:var(--ink);stroke-width:1.4}
+:is(.dec,.dec-legend) svg .nd.dia{fill:color-mix(in srgb,var(--phase) 10%,var(--panel));stroke:var(--phase)}
+:is(.dec,.dec-legend) svg .nd.end{fill:var(--chip)}
+:is(.dec,.dec-legend) svg .nd.out{fill:color-mix(in srgb,var(--gl) 8%,var(--panel));stroke:var(--gl)}
+:is(.dec,.dec-legend) svg .nd.acc{fill:color-mix(in srgb,var(--acc) 10%,var(--panel));stroke:var(--acc)}
+:is(.dec,.dec-legend) svg .nd.mri{fill:color-mix(in srgb,var(--mri) 10%,var(--panel));stroke:var(--mri)}
+:is(.dec,.dec-legend) svg .nd.tbd{stroke:var(--tbd);stroke-dasharray:4 3}
+:is(.dec,.dec-legend) svg text{font-family:var(--font);font-size:11.5px;fill:var(--ink);text-anchor:middle}
+:is(.dec,.dec-legend) svg text.yn{font-size:10.5px;font-weight:700;fill:var(--muted);text-anchor:start}
+:is(.dec,.dec-legend) svg .ed{fill:none;stroke:var(--muted);stroke-width:1.4}
+:is(.dec,.dec-legend) svg .ah{fill:var(--muted)}
+:is(.dec,.dec-legend) svg g.n{cursor:help}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Design preview · Autodesk ACC · MRI X · AP approval</div>
+    <h1>Autodesk–MRI integration map</h1>
+    <p class="lede">End-to-end picture for the integration review:</p>
+    <ul class="hbul">
+      <li>what data moves between systems</li>
+      <li>the source of truth for each stage</li>
+      <li>triggers, timing and config on each stage</li>
+      <li>field-by-field mapping &amp; workflow visual — <span class="expr"><span class="br">[</span><span class="t t-src">Autodesk budget</span><span class="br">]</span> <span class="op">⇒</span> <span class="br">[</span><span class="t t-code">MRI cost code</span> <span class="op">×</span> <span class="t t-line">budget line</span> <span class="op">×</span> <span class="t t-gl">GL account</span><span class="br">]</span></span></li>
+    </ul>
+  </header>
+
+  <!-- ===================== SECTION 2 · FIELD MAP ===================== -->
+  <section class="sec-map">
+    <div class="sec-title"><h2>Cost code, budget &amp; GL field map</h2><span class="n">stages 3–4, field by field</span></div>
+    <p class="lede" style="margin-top:4px">The Autodesk <code style="font-family:var(--mono)">formattedCode</code> is split on the dash; the pieces fan out to MRI, and <b>PMJC_Map</b> (the interface chart) resolves the entity, cost list and <b>GL account</b> to post against — the same cost code can map to a different account depending on phase.</p>
+
+    <div class="example" aria-label="Worked example">
+      <span class="src">0-01-010-O</span>
+      <span class="arr">splits into →</span>
+      <span class="ex-chip phase"><span class="lab">phase</span><b>0</b></span>
+      <span class="ex-chip"><span class="lab">major</span><b>01</b></span>
+      <span class="ex-chip"><span class="lab">minor</span><b>010</b></span>
+      <span class="ex-chip"><span class="lab">cost code</span><b>01-010</b></span>
+      <span class="ex-chip"><span class="lab">category</span><b>O</b></span>
+      <span class="arr">→ map →</span>
+      <span class="ex-chip gl"><span class="lab">GL acct</span><b>by phase</b></span>
+    </div>
+    <p class="hint">The leading <b>0</b> is the <b>phase</b> part — not part of the MRI cost code; it helps steer which GL account the map resolves to.</p>
+
+    <div class="legend">
+      <span><i class="split"></i> code split</span>
+      <span><i class="direct"></i> direct copy</span>
+      <span><i class="lookup"></i> PMJC_Map lookup</span>
+      <span><i class="key"></i> match key</span>
+      <span><i class="const"></i> constant / job context</span>
+    </div>
+    <p class="hint">Hover a field to isolate its links · scroll the diagram sideways.</p>
+
+    <div class="scroll">
+      <div class="canvas" id="canvas">
+        <svg class="edges" id="edges" aria-hidden="true"></svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SECTION 1 · SWIMLANES ===================== -->
+  <section class="sec-flow">
+    <div class="sec-title"><h2>End-to-end flow</h2><span class="n">systems across · run order down · arrow = data direction</span></div>
+    <p class="hint">Columns are the systems. Top-to-bottom is the order stages run. Each card's arrow (and its colour) shows which way the data moves and where it lands. <b>Often</b> = how often it runs, <b>When</b> = what triggers it or what it runs after, <b>Lag</b> = how long until the data shows up on the other side. Click a stage to expand its detail. Hover any dotted term for what it means. <b>SoT</b> = source of truth: the system whose data wins when the two disagree. Each stage also shows a flowchart of what happens to each record; anything not decided yet is drawn dashed.</p>
+    <div class="legend dec-legend" id="dec-legend"></div>
+
+    <div class="laneswrap">
+      <div class="lanes">
+        <!-- lane headers -->
+        <div class="lane-h acc" style="grid-row:1;grid-column:2">Autodesk ACC</div>
+        <div class="lane-h mri" style="grid-row:1;grid-column:3">MRI X</div>
+        <div class="lane-h nexus" style="grid-row:1;grid-column:4">AP approval</div>
+
+        <!-- 1 Companies: MRI -> ACC -->
+        <div class="no" style="grid-row:2">1</div>
+        <div class="stage" style="grid-row:2;grid-column:2 / span 2">
+          <div class="route"><span class="sys acc">ACC</span><span class="mid"><span class="title">Companies</span><span class="dir to-acc">←</span></span><span class="sys mri">MRI</span></div>
+          <div class="body">
+            <div class="io"><span>read <code>PMAP_Vendors</code></span><span>write <b>ACC Companies</b></span><span>match <code>MRI.PMAP_Vendors.VendorID = ACC.Company.erpId</code></span><span>if none: <code>MRI.PMAP_Vendors.VendorName = ACC.Company.name</code></span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">MRI (vendors)</span></div><div class="m"><span class="lab">Often</span><span class="val">TBD</span></div><div class="m"><span class="lab">When</span><span class="val">first; before projects</span></div><div class="m"><span class="lab">Lag</span><span class="val">TBD</span></div><div class="m"><span class="lab">Options</span><span class="val">default country for vendors with none</span></div></div>
+          </div>
+          <div class="foot"><span class="trig cu">Create + Update</span></div>
+        </div>
+
+        <!-- 2 Projects: MRI -> ACC -->
+        <div class="no" style="grid-row:3">2</div>
+        <div class="stage" style="grid-row:3;grid-column:2 / span 2">
+          <div class="route"><span class="sys acc">ACC</span><span class="mid"><span class="title">Projects</span><span class="dir to-acc">←</span></span><span class="sys mri">MRI</span></div>
+          <div class="body">
+            <div class="io"><span>read <code>PMJC_JobCodes</code></span><span>write <b>ACC Projects</b></span><span>match <code>MRI.PMJC_JobCodes.JobCode = ACC.Project.jobNumber</code></span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">MRI (jobs)</span></div><div class="m"><span class="lab">Often</span><span class="val">TBD</span></div><div class="m"><span class="lab">When</span><span class="val">after companies</span></div><div class="m"><span class="lab">Lag</span><span class="val">TBD</span></div><div class="m"><span class="lab">Options</span><span class="val">—</span></div></div>
+          </div>
+          <div class="foot"><span class="trig cu">Create + Update</span></div>
+        </div>
+
+        <!-- 3 Cost codes: ACC -> MRI -->
+        <div class="no" style="grid-row:4">3</div>
+        <div class="stage" style="grid-row:4;grid-column:2 / span 2">
+          <div class="route"><span class="sys acc">ACC</span><span class="mid"><span class="title">Cost codes</span><span class="dir to-mri">→</span></span><span class="sys mri">MRI</span></div>
+          <div class="body">
+            <div class="io"><span>read <b>ACC budget codes</b></span><span>write <code>CreateCostCode</code></span><span>match <code>MRI.PMJC_JobCodes.JobCode = ACC.Project.jobNumber</code></span><span>and <code>MRI.costCode.JC_CostCode = ACC.BudgetCode[cost_code].code</code></span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">Autodesk (coding)</span></div><div class="m"><span class="lab">Often</span><span class="val">TBD</span></div><div class="m"><span class="lab">When</span><span class="val">before budgets</span></div><div class="m"><span class="lab">Lag</span><span class="val">TBD</span></div><div class="m"><span class="lab">Options</span><span class="val">new codes reported and held for customer review</span></div></div>
+          </div>
+          <div class="foot"><span class="trig ck">Create only · do not update</span></div>
+        </div>
+
+        <!-- 4 Budgets: ACC -> MRI -->
+        <div class="no" style="grid-row:5">4</div>
+        <div class="stage" style="grid-row:5;grid-column:2 / span 2">
+          <div class="route"><span class="sys acc">ACC</span><span class="mid"><span class="title">Budgets</span><span class="dir to-mri">→</span></span><span class="sys mri">MRI</span></div>
+          <div class="body">
+            <div class="io"><span>read <b>ACC budgets</b> + <code>PMJC_Map</code></span><span>write <code>CreateBudgetDetail</code></span><span>split <code>ACC.Budget.formattedCode</code> (0-01-010-O)</span><span>match <code>MRI.costCode.PhaseCode = part 1</code></span><span>and <code>MRI.costCode.JC_CostCode = parts 2-3</code></span><span>and <code>MRI.costCode.Category = part 4</code></span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">Autodesk (budgets)</span></div><div class="m"><span class="lab">Often</span><span class="val">TBD</span></div><div class="m"><span class="lab">When</span><span class="val">after cost codes</span></div><div class="m"><span class="lab">Lag</span><span class="val">TBD</span></div><div class="m"><span class="lab">Options</span><span class="val">budget type (default STD); codes not in MRI skipped and reported</span></div></div>
+          </div>
+          <div class="phase-ribbon"><span class="flag">⚑ GL reclass</span><span>Phase move (Pre-Dev <code>1410</code> → WIP/CPI <code>1420</code>) is a <b>GL reclassification</b>, not a one-click move. Automation possible; design <b>OPEN</b>: trigger · historical-cost reclass · in-flight txns.</span></div>
+          <div class="foot"><span class="trig cu">Create + Update</span></div>
+        </div>
+
+        <!-- 5 Commitments: ACC -> MRI -->
+        <div class="no" style="grid-row:6">5</div>
+        <div class="stage" style="grid-row:6;grid-column:2 / span 2">
+          <div class="route"><span class="sys acc">ACC</span><span class="mid"><span class="title">Commitments / POs</span><span class="dir to-mri">→</span></span><span class="sys mri">MRI</span></div>
+          <div class="body">
+            <div class="io"><span>read <b>ACC commitments</b></span><span>write <b>MRI commitments</b></span><span>match <code>MRI.PMAP_Vendors.VendorID = ACC.Company.erpId</code></span><span>and <code>MRI.Contract.ContractNumber = ACC.Project.jobNumber + "-" + ACC.Contract.code</code></span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">Autodesk (commitments)</span></div><div class="m"><span class="lab">Often</span><span class="val">TBD</span></div><div class="m"><span class="lab">When</span><span class="val">after budgets</span></div><div class="m"><span class="lab">Lag</span><span class="val">TBD</span></div><div class="m"><span class="lab">Options</span><span class="val">—</span></div></div>
+          </div>
+          <div class="foot"><span class="trig cu">Create + Update</span></div>
+        </div>
+
+        <!-- AP approval loop -->
+        <div class="sub-h" style="grid-row:7">Invoice loop <span>· the AP system runs these on its own schedule, through MRI's APIs</span></div>
+
+        <!-- 6 Job-cost data: MRI -> AP system -->
+        <div class="no" style="grid-row:8">6</div>
+        <div class="stage" style="grid-row:8;grid-column:3 / span 2">
+          <div class="route"><span class="sys mri">MRI</span><span class="mid"><span class="title">Job-cost data</span><span class="dir to-nexus">→</span></span><span class="sys nexus">AP system</span></div>
+          <div class="body">
+            <div class="io"><span>reads jobs, <b>phase codes</b>, cost codes</span><span>job-cost budgets, contracts, change orders</span><span>actuals · payments (read)</span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">MRI</span></div><div class="m"><span class="lab">Often</span><span class="val">hourly</span></div><div class="m"><span class="lab">When</span><span class="val">AP system schedule; the customer can change</span></div><div class="m"><span class="lab">Lag</span><span class="val">up to 1 hr</span></div><div class="m"><span class="lab">Built by</span><span class="val">AP system</span></div></div>
+          </div>
+          <div class="phase-ribbon"><span class="flag">⚑ phase</span><span>After a Pre-Dev → WIP reclass, the AP system sees the new coding on its next hourly read.</span></div>
+          <div class="foot"><span class="trig nx">Read · hourly</span></div>
+        </div>
+
+        <!-- 7 Vendors: MRI -> AP system -->
+        <div class="no" style="grid-row:9">7</div>
+        <div class="stage" style="grid-row:9;grid-column:3 / span 2">
+          <div class="route"><span class="sys mri">MRI</span><span class="mid"><span class="title">Vendors</span><span class="dir to-nexus">→</span></span><span class="sys nexus">AP system</span></div>
+          <div class="body">
+            <div class="io"><span>reads <code>PMAP_Vendors</code></span><span>same vendor master as stage 1</span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">MRI (vendors)</span></div><div class="m"><span class="lab">Often</span><span class="val">every 15 min</span></div><div class="m"><span class="lab">When</span><span class="val">AP system schedule; the customer can change</span></div><div class="m"><span class="lab">Lag</span><span class="val">up to 15 min</span></div><div class="m"><span class="lab">Built by</span><span class="val">AP system</span></div></div>
+          </div>
+          <div class="foot"><span class="trig nx">Read · 15 min</span></div>
+        </div>
+
+        <!-- 8 Invoices: ACC -> AP system -->
+        <div class="no" style="grid-row:10">8</div>
+        <div class="stage tbd" style="grid-row:10;grid-column:2 / span 3">
+          <div class="route"><span class="sys acc">ACC</span><span class="mid"><span class="title">Job-cost invoices (pre-coded)</span><span class="dir to-nexus">→</span></span><span class="sys nexus">AP system</span></div>
+          <div class="body">
+            <div class="io"><span>all job-cost invoices start in <b>Autodesk</b> and are pre-coded there</span><span>sent with job-cost coding to the AP system’s <b>open API</b> for approval</span><span>The AP vendor’s standard pattern</span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">Autodesk (intake + coding)</span></div><div class="m"><span class="lab">Often</span><span class="val">TBD</span></div><div class="m"><span class="lab">When</span><span class="val">after pre-coding in Autodesk</span></div><div class="m"><span class="lab">Lag</span><span class="val">TBD</span></div><div class="m"><span class="lab">Built by</span><span class="val">“Autodesk side” · self-service · owner TBD</span></div></div>
+          </div>
+          <div class="foot"><span class="trig tbd">Owner + field spec open</span></div>
+        </div>
+
+        <!-- 9 Approved invoices: AP system -> MRI -->
+        <div class="no" style="grid-row:11">9</div>
+        <div class="stage" style="grid-row:11;grid-column:3 / span 2">
+          <div class="route"><span class="sys mri">MRI</span><span class="mid"><span class="title">Approved invoices</span><span class="dir to-mri">←</span></span><span class="sys nexus">AP system</span></div>
+          <div class="body">
+            <div class="io"><span>approved invoices into <b>MRI AP</b></span><span>job-coded → lands in job-cost actuals</span></div>
+            <div class="meta"><div class="m"><span class="lab">SoT</span><span class="val sot">AP system (approval)</span></div><div class="m"><span class="lab">Often</span><span class="val">every 15 min</span></div><div class="m"><span class="lab">When</span><span class="val">after approval in the AP system</span></div><div class="m"><span class="lab">Lag</span><span class="val">up to 15 min</span></div><div class="m"><span class="lab">Built by</span><span class="val">AP system</span></div></div>
+          </div>
+          <div class="foot"><span class="trig nx">Write · 15 min</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note"><span>▸</span><span><b>Separate workstream:</b> Autodesk → Sage → MRI job-cost reconciliation — timing and status still being worked through, tracked alongside this pipeline rather than inside it.</span></div>
+  </section>
+
+  <!-- ===================== SECTION 3 · RECLASS TRIAL ===================== -->
+  <section class="sec-rc">
+    <div class="sec-title"><h2>Phase reclass trial</h2><span class="n">1410 → 1420, as unposted MRI journals</span></div>
+    <p class="lead2">A dry-run of the Pre-Dev → WIP/CPI move. <code>PMGL_CreateJournalEntryV3</code> lines carry job + cost-code coding, so the reclass posts to <b>job-cost detail</b>, not just the GL — created as <b>unposted drafts</b> for accounting to review and post.</p>
+    <div class="steps">
+      <div class="step"><span class="n">1 · <span class="safe">safe</span></span><span class="t">Read &amp; verify</span><span class="d">balance on 1410 · entity, cost list, phase, cost code</span></div>
+      <div class="step"><span class="n">2 · write (draft)</span><span class="t">Post reclass</span><span class="d">choose A or B · STATUS=U, job-coded</span></div>
+      <div class="step"><span class="n">3 · <span class="opt">optional</span></span><span class="t">Flip account</span><span class="d">job controlling account 1410 → 1420</span></div>
+      <div class="step"><span class="n">4 · verify</span><span class="t">Re-read</span><span class="d">1410 → 0, 1420 loaded, detail present</span></div>
+    </div>
+    <div class="gl">
+      <div class="opt">
+        <span class="optlab">A · direct<small>no clearing</small></span>
+        <span class="acct p1"><b>25-000-1410</b><small>WIP-Preconstruction</small></span>
+        <span class="fl"><span class="neg">−$</span><span class="ar">→</span></span>
+        <span class="acct p2"><b>25-000-1420</b><small>WIP-Commercial</small></span>
+        <span class="tail">one balanced journal</span>
+      </div>
+      <div class="opt">
+        <span class="optlab">B · through 1990<small>mirrors their books</small></span>
+        <span class="acct p1"><b>25-000-1410</b><small>WIP-Precon</small></span>
+        <span class="fl"><span class="neg">−$</span><span class="ar">→</span></span>
+        <span class="acct clr"><b>25-000-1990</b><small>Cash Transfer</small></span>
+        <span class="fl"><span class="pos">+$</span><span class="ar">→</span></span>
+        <span class="acct p2"><b>25-000-1420</b><small>WIP-Commercial</small></span>
+        <span class="tail">two journals · 1990 nets 0</span>
+      </div>
+    </div>
+    <div class="rcnote"><span>▸</span><span>Mirrors a real customer move: <span class="ex">job 10-01-001 · 20-250 O · $125,000.00</span>. The trial runs a tiny amount first; writes are unposted and go only to a confirmed <b>test</b> database.</span></div>
+    <div class="rcnote"><span>▸</span><span><b>Status 10.28:</b> built as one integration (direct or 1990 method, set in config). <b>Live test passed in the customer’s test database:</b> a $0.01 reclass on 10-01-001 (phase 01 → 02) was accepted as unposted <b>JE 000101</b>, period 01/25, source JE; MRI assigned the reference.</span></div>
+  </section>
+
+  <div class="open-note"><span class="k">OPEN</span><span><b>Who builds stage 8</b> (Autodesk → AP system invoices): the AP vendor calls it a self-service build on the Autodesk side, against the AP system's open API. Not yet assigned, and we have no invoice field spec from the AP vendor. <b>Phase reclass</b>: the trigger (who flips the phase, and when) and in-flight invoices at switch time still need sign-off. Stages 6, 7 and 9 are the AP system's standard schedule; the customer can change it.</span></div>
+
+  <footer>
+    Stages 1–2 push MRI masters out to Autodesk; stages 3–5 bring Autodesk cost coding, budgets and commitments back into MRI; stages 6–9 are the AP system invoice loop, per the AP vendor. In stages 3–5, where the interface chart (<code>PMJC_Map</code>) resolves the GL account by phase + cost code. Cost code = <code>Major-Minor</code> (parts 2–3); category is the last part. <code>BudgetItem</code> and <code>DetailDescription</code> are constants; <code>JobCode</code>, <code>BudgetType</code>, <code>Period</code> and the target <code>JobCostList</code> come from the job context. Timing/cadence is marked TBD where not yet decided.
+  </footer>
+</div>
+
+<script>
+const TABLES = [
+  { id:'acc', role:'src', nm:'Autodesk ACC', sb:'Budget — source', col:0, fields:[
+    {k:'formattedCode', t:'formattedCode', meta:'0-01-010-O'},
+    {k:'name', t:'name'},
+    {k:'originalAmount', t:'originalAmount', meta:'$'},
+  ]},
+  { id:'split', role:'dec', nm:'Budget code', sb:'formattedCode, split on "-"', col:1, fields:[
+    {k:'phase', t:'phase', meta:'part 1'},
+    {k:'major', t:'major', meta:'part 2'},
+    {k:'minor', t:'minor', meta:'part 3'},
+    {k:'code',  t:'cost code', meta:'major-minor'},
+    {k:'cat',   t:'category', meta:'part 4'},
+  ]},
+  { id:'cc', role:'tgt', nm:'MRI · Cost Code', sb:'PMJC_CreateCostCode — target', col:2, fields:[
+    {k:'ccList', t:'JobCostList', tag:'ctx'},
+    {k:'ccCode', t:'JobCostCode'},
+    {k:'ccMajor',t:'MajorCostCodePortion'},
+    {k:'ccMinor',t:'MinorCostCodePortion'},
+    {k:'ccCat',  t:'CostCodeCategory'},
+    {k:'ccName', t:'CodeName'},
+  ]},
+  { id:'map', role:'map', nm:'MRI · PMJC_Map', sb:'interface chart — by phase + code', col:2, fields:[
+    {k:'mPhase', t:'JobCostPhaseCode', key:true},
+    {k:'mCode',  t:'JobCostCode', key:true},
+    {k:'mEntity',t:'EntityId'},
+    {k:'mList',  t:'JobCostList'},
+    {k:'mAcct',  t:'AccountNumber', tag:'gl'},
+  ]},
+  { id:'bd', role:'tgt', nm:'MRI · Budget line', sb:'PMJC_CreateBudgetDetail — target', col:3, wide:true, fields:[
+    {k:'bPhase', t:'PhaseCode'},
+    {k:'bCode',  t:'CostCode'},
+    {k:'bEntity',t:'EntityID'},
+    {k:'bList',  t:'CostList'},
+    {k:'bAcct',  t:'→ GL account', tag:'gl'},
+    {k:'bAmt',   t:'OriginalAmount'},
+    {k:'bItem',  t:'BudgetItem', tag:'const', meta:'"1"'},
+    {k:'bDesc',  t:'DetailDescription', tag:'const', meta:'"Original Budget"'},
+    {k:'bJob',   t:'JobCode', tag:'ctx'},
+    {k:'bType',  t:'BudgetType', tag:'ctx'},
+    {k:'bPeriod',t:'Period', tag:'ctx'},
+  ]},
+];
+
+const EDGES = [
+  ['acc.formattedCode','split.phase','split'],
+  ['acc.formattedCode','split.major','split'],
+  ['acc.formattedCode','split.minor','split'],
+  ['acc.formattedCode','split.code','split'],
+  ['acc.formattedCode','split.cat','split'],
+  ['split.code','cc.ccCode','direct'],
+  ['split.major','cc.ccMajor','direct'],
+  ['split.minor','cc.ccMinor','direct'],
+  ['split.cat','cc.ccCat','direct'],
+  ['acc.name','cc.ccName','direct'],
+  ['split.phase','bd.bPhase','direct'],
+  ['split.code','bd.bCode','direct'],
+  ['acc.originalAmount','bd.bAmt','direct'],
+  ['split.phase','map.mPhase','key'],
+  ['split.code','map.mCode','key'],
+  ['map.mEntity','bd.bEntity','lookup'],
+  ['map.mList','bd.bList','lookup'],
+  ['map.mAcct','bd.bAcct','lookup'],
+];
+
+const canvas = document.getElementById('canvas');
+const svg = document.getElementById('edges');
+const cols = [];
+TABLES.forEach(t=>{ if(!cols[t.col]){ const c=document.createElement('div'); c.className='col'; cols[t.col]=c; } });
+cols.forEach(c=>canvas.appendChild(c));
+
+const fieldEls = {};
+TABLES.forEach(t=>{
+  const card=document.createElement('div');
+  card.className='tbl '+t.role+(t.wide?' wide':''); card.setAttribute('data-role',t.role);
+  const head=document.createElement('div'); head.className='thead';
+  head.innerHTML='<span class="nm"></span><span class="sb"></span>';
+  head.querySelector('.nm').textContent=t.nm; head.querySelector('.sb').textContent=t.sb;
+  card.appendChild(head);
+  t.fields.forEach(f=>{
+    const row=document.createElement('div'); row.className='row'+(f.key?' key':'')+(f.tag==='gl'?' gl':'');
+    const id=t.id+'.'+f.k; row.dataset.id=id;
+    const fn=document.createElement('span'); fn.className='fn'; fn.textContent=f.t; row.appendChild(fn);
+    if(f.tag){ const g=document.createElement('span'); g.className='tag '+f.tag; g.textContent=(f.tag==='const'?'const':(f.tag==='gl'?'GL':'context')); row.appendChild(g); }
+    else if(f.meta){ const m=document.createElement('span'); m.className='meta'; m.textContent=f.meta; row.appendChild(m); }
+    card.appendChild(row); fieldEls[id]=row;
+  });
+  cols[t.col].appendChild(card);
+});
+
+function rectOf(el){
+  const r=el.getBoundingClientRect(), c=canvas.getBoundingClientRect();
+  return {left:r.left-c.left, right:r.right-c.left, top:r.top-c.top, bottom:r.bottom-c.top, w:r.width, h:r.height,
+          cx:r.left-c.left+r.width/2, cy:r.top-c.top+r.height/2};
+}
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+const colorFor={direct:'--e-direct',split:'--e-split',lookup:'--e-lookup',key:'--e-key'};
+
+function draw(){
+  svg.innerHTML='';
+  const W=canvas.scrollWidth, H=canvas.scrollHeight;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.setAttribute('width',W); svg.setAttribute('height',H);
+  EDGES.forEach(([from,to,type])=>{
+    const a=fieldEls[from], b=fieldEls[to]; if(!a||!b) return;
+    const ra=rectOf(a), rb=rectOf(b);
+    let p1,p2,c1,c2;
+    if(Math.abs(rb.cx-ra.cx)>=Math.abs(rb.cy-ra.cy)){
+      const rtl=rb.cx<ra.cx;
+      p1={x: rtl?ra.left:ra.right, y:ra.cy};
+      p2={x: rtl?rb.right:rb.left, y:rb.cy};
+      const d=Math.max(34,Math.min(130,Math.abs(p2.x-p1.x)*0.5)), s=rtl?-1:1;
+      c1={x:p1.x+d*s,y:p1.y}; c2={x:p2.x-d*s,y:p2.y};
+    } else {
+      const btt=rb.cy<ra.cy;
+      p1={x:ra.cx,y:btt?ra.top:ra.bottom};
+      p2={x:rb.cx,y:btt?rb.bottom:rb.top};
+      const d=Math.max(28,Math.min(90,Math.abs(p2.y-p1.y)*0.5)), s=btt?-1:1;
+      c1={x:p1.x,y:p1.y+d*s}; c2={x:p2.x,y:p2.y-d*s};
+    }
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',`M${p1.x},${p1.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${p2.x},${p2.y}`);
+    path.setAttribute('stroke',cssVar(colorFor[type]));
+    if(type==='key') path.setAttribute('stroke-dasharray','5 4');
+    path.dataset.from=from; path.dataset.to=to;
+    svg.appendChild(path);
+  });
+}
+
+function connected(id){
+  const paths=[], rows=new Set([id]);
+  svg.querySelectorAll('path').forEach(p=>{
+    if(p.dataset.from===id||p.dataset.to===id){ paths.push(p); rows.add(p.dataset.from); rows.add(p.dataset.to); }
+  });
+  return {paths,rows};
+}
+Object.entries(fieldEls).forEach(([id,row])=>{
+  row.addEventListener('mouseenter',()=>{
+    const {paths,rows}=connected(id);
+    if(!paths.length) return;
+    canvas.classList.add('dim');
+    paths.forEach(p=>p.classList.add('hot'));
+    rows.forEach(r=>fieldEls[r]&&fieldEls[r].classList.add('hot'));
+  });
+  row.addEventListener('mouseleave',()=>{
+    canvas.classList.remove('dim');
+    svg.querySelectorAll('path.hot').forEach(p=>p.classList.remove('hot'));
+    Object.values(fieldEls).forEach(r=>r.classList.remove('hot'));
+  });
+});
+
+draw();
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(draw);
+new ResizeObserver(draw).observe(canvas);
+addEventListener('resize',draw);
+
+// Accordion: within each group only one item is open at a time; the first starts open.
+function accordion(items, headOf, chevText, onOpen){
+  items.forEach((it,i)=>{
+    const h=headOf(it); if(!h) return;
+    const ch=document.createElement('span'); ch.className=chevText.cls; ch.setAttribute('aria-hidden','true'); ch.textContent=chevText.txt;
+    h.appendChild(ch);
+    h.setAttribute('role','button'); h.setAttribute('tabindex','0');
+    const set=(el,open)=>{ el.classList.toggle('collapsed',!open); headOf(el)?.setAttribute('aria-expanded',String(open)); };
+    set(it,i===0);
+    const t=()=>{ const open=it.classList.contains('collapsed'); items.forEach(o=>set(o,false)); set(it,open); if(open&&onOpen) requestAnimationFrame(onOpen); };
+    h.addEventListener('click',t);
+    h.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); } });
+  });
+}
+// Stage cards inside the flow section
+accordion([...document.querySelectorAll('.sec-flow .stage')], st=>st.querySelector('.route'), {cls:'chev',txt:'▸'});
+// Top-level sections
+accordion([...document.querySelectorAll('section.sec-map, section.sec-flow, section.sec-rc')], s=>s.querySelector('.sec-title'), {cls:'schev',txt:'▾'}, draw);
+</script>
+<script>
+// Decision flowcharts. Nodes sit on a 2-column grid (c = column, r = row); edges run straight down or straight right.
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const COLX = [110, 310], ROW0 = 36, ROWH = 84;
+  const SIZE = { oval: [150, 44], rect: [150, 46], para: [156, 46], cyl: [150, 54], dia: [172, 68] };
+  const SHAPES = {
+    oval: ['Start / end', 'Where a record’s path starts or stops.'],
+    rect: ['Action', 'Something the integration does.'],
+    dia:  ['Decision', 'A yes/no check. The record follows the Yes or No arrow.'],
+    cyl:  ['System read', 'Data read from Autodesk (blue) or MRI (orange).'],
+    para: ['Report / hold', 'Written to the run log for someone to review.']
+  };
+
+  const flows = [
+    { no: 1, title: 'Companies', dirn: 'MRI → ACC', nodes: {
+        a: { s: 'cyl', k: 'mri', c: 0, r: 0, t: 'Read MRI vendor\nPMAP_Vendors' },
+        b: { s: 'dia', c: 0, r: 1, t: 'Match in ACC?\nerpId, else name', h: 'Match on MRI VendorID = ACC erpId first. If nothing matches, try the vendor name.' },
+        c: { s: 'rect', c: 1, r: 1, t: 'Create ACC\ncompany' },
+        d: { s: 'dia', c: 0, r: 2, t: 'Anything\ndifferent?' },
+        e: { s: 'rect', c: 0, r: 3, t: 'Update ACC\ncompany' },
+        f: { s: 'oval', c: 1, r: 2, t: 'Leave as is' } },
+      edges: [['a','b'], ['b','c','No'], ['b','d','Yes'], ['d','e','Yes'], ['d','f','No']] },
+
+    { no: 2, title: 'Projects', dirn: 'MRI → ACC', nodes: {
+        a: { s: 'cyl', k: 'mri', c: 0, r: 0, t: 'Read MRI job\nPMJC_JobCodes' },
+        b: { s: 'dia', c: 0, r: 1, t: 'In ACC?\nJobCode =\njobNumber' },
+        c: { s: 'rect', c: 1, r: 1, t: 'Create ACC\nproject' },
+        d: { s: 'dia', c: 0, r: 2, t: 'Anything\ndifferent?' },
+        e: { s: 'rect', c: 0, r: 3, t: 'Update ACC\nproject' },
+        f: { s: 'oval', c: 1, r: 2, t: 'Leave as is' } },
+      edges: [['a','b'], ['b','c','No'], ['b','d','Yes'], ['d','e','Yes'], ['d','f','No']] },
+
+    { no: 3, title: 'Cost codes', dirn: 'ACC → MRI', nodes: {
+        a: { s: 'cyl', k: 'acc', c: 0, r: 0, t: 'Read ACC\nbudget code' },
+        b: { s: 'dia', c: 0, r: 1, t: 'Code in MRI?' },
+        c: { s: 'para', c: 1, r: 1, t: 'Report for\ncustomer review', h: 'A code that doesn’t exist in MRI isn’t created automatically. It’s listed in the run log for the customer to review.' },
+        d: { s: 'dia', c: 0, r: 2, t: 'Code assigned\nto job?' },
+        e: { s: 'rect', c: 1, r: 2, t: 'Assign to job' },
+        f: { s: 'oval', c: 0, r: 3, t: 'Leave as is', h: 'The code already exists and is on the job. Nothing is changed, even if Autodesk differs.' } },
+      edges: [['a','b'], ['b','c','No'], ['b','d','Yes'], ['d','e','No'], ['d','f','Yes']] },
+
+    { no: 4, title: 'Budgets', dirn: 'ACC → MRI', nodes: {
+        a: { s: 'cyl', k: 'acc', c: 0, r: 0, t: 'Read ACC budget\n+ PMJC_Map' },
+        b: { s: 'rect', c: 0, r: 1, t: 'Split code\n0-01-010-O', h: 'phase 0 · cost code 01-010 · category O' },
+        c: { s: 'dia', c: 0, r: 2, t: 'Cost code\nin MRI?' },
+        d: { s: 'para', c: 1, r: 2, t: 'Skip line,\nreport in run log' },
+        e: { s: 'dia', c: 0, r: 3, t: 'Budget line\nexists?' },
+        f: { s: 'rect', c: 1, r: 3, t: 'Create\nbudget line' },
+        g: { s: 'dia', c: 0, r: 4, t: 'Anything\ndifferent?' },
+        h: { s: 'rect', c: 0, r: 5, t: 'Update\nbudget line' },
+        i: { s: 'oval', c: 1, r: 4, t: 'Leave as is' } },
+      edges: [['a','b'], ['b','c'], ['c','d','No'], ['c','e','Yes'], ['e','f','No'], ['e','g','Yes'], ['g','h','Yes'], ['g','i','No']] },
+
+    { no: 5, title: 'Commitments / POs', dirn: 'ACC → MRI', nodes: {
+        a: { s: 'cyl', k: 'acc', c: 0, r: 0, t: 'Read ACC\ncommitment' },
+        b: { s: 'dia', c: 0, r: 1, t: 'Vendor in MRI?\nVendorID = erpId' },
+        c: { s: 'rect', k: 'tbd', c: 1, r: 1, t: 'Not decided', h: 'What happens to a commitment whose vendor isn’t in MRI is not decided yet.' },
+        d: { s: 'dia', c: 0, r: 2, t: 'Contract exists?\njob + "-" + code' },
+        e: { s: 'rect', c: 1, r: 2, t: 'Create MRI\ncommitment' },
+        f: { s: 'dia', c: 0, r: 3, t: 'Anything\ndifferent?' },
+        g: { s: 'rect', c: 0, r: 4, t: 'Update MRI\ncommitment' },
+        h: { s: 'oval', c: 1, r: 3, t: 'Leave as is' } },
+      edges: [['a','b'], ['b','c','No'], ['b','d','Yes'], ['d','e','No'], ['d','f','Yes'], ['f','g','Yes'], ['f','h','No']] },
+
+    // 6–9: the AP approval loop. The AP vendor builds and runs these; only what they told us is drawn.
+    { no: 6, title: 'Job-cost data', dirn: 'MRI → AP system', nodes: {
+        a: { s: 'oval', c: 0, r: 0, t: 'Hourly\n(AP system schedule)', h: 'The AP vendor’s standard interval; the customer can ask for a different one.' },
+        b: { s: 'cyl', k: 'mri', c: 0, r: 1, t: 'Read MRI job-cost data', h: 'Jobs, phase codes, cost codes, job-cost budgets, contracts, change orders, actuals and payments.' },
+        c: { s: 'rect', c: 0, r: 2, t: 'Refresh AP system\njob-cost coding', h: 'Invoice approvers code against what the AP system last read. A phase change from a reclass shows up after the next read.' },
+        d: { s: 'oval', c: 0, r: 3, t: 'Wait for next hour' } },
+      edges: [['a','b'], ['b','c'], ['c','d']] },
+
+    { no: 7, title: 'Vendors', dirn: 'MRI → AP system', nodes: {
+        a: { s: 'oval', c: 0, r: 0, t: 'Every 15 min\n(AP system schedule)', h: 'The AP vendor’s standard interval; the customer can ask for a different one.' },
+        b: { s: 'cyl', k: 'mri', c: 0, r: 1, t: 'Read MRI vendors\nPMAP_Vendors', h: 'The same vendor master stage 1 sends to Autodesk.' },
+        c: { s: 'rect', c: 0, r: 2, t: 'Refresh AP system\nvendor list' },
+        d: { s: 'oval', c: 0, r: 3, t: 'Wait 15 min' } },
+      edges: [['a','b'], ['b','c'], ['c','d']] },
+
+    { no: 8, title: 'Job-cost invoices', dirn: 'ACC → AP system', nodes: {
+        a: { s: 'cyl', k: 'acc', c: 0, r: 0, t: 'Invoice received\nin Autodesk', h: 'All job-cost invoices start in Autodesk.' },
+        b: { s: 'rect', c: 0, r: 1, t: 'Pre-code in Autodesk\njob · cost code', h: 'Coded to the job and cost code in Autodesk before it goes to the AP system.' },
+        c: { s: 'rect', k: 'tbd', c: 0, r: 2, t: 'Send to AP system\nopen API', h: 'Self-service build on the Autodesk side. Who builds it, and the AP system invoice field spec, are still open.' },
+        d: { s: 'oval', c: 0, r: 3, t: 'Waits for approval\nin the AP system', h: 'Continues in stage 9 once approved.' } },
+      edges: [['a','b'], ['b','c'], ['c','d']] },
+
+    { no: 9, title: 'Approved invoices', dirn: 'AP system → MRI', nodes: {
+        a: { s: 'oval', c: 0, r: 0, t: 'Every 15 min\n(AP system schedule)', h: 'The AP vendor’s standard interval; the customer can ask for a different one.' },
+        b: { s: 'dia', c: 0, r: 1, t: 'Approved\nin the AP system?' },
+        c: { s: 'oval', c: 1, r: 1, t: 'Stays in the AP system\nuntil approved' },
+        d: { s: 'rect', c: 0, r: 2, t: 'Write invoice\nto MRI AP', h: 'Job-coded, so it lands in job-cost actuals.' },
+        e: { s: 'oval', c: 0, r: 3, t: 'In MRI job-cost\nactuals' } },
+      edges: [['a','b'], ['b','c','No'], ['b','d','Yes'], ['d','e']] },
+
+    { no: '⚑', title: 'Phase reclass', dirn: '1410 → 1420', nodes: {
+        a: { s: 'oval', k: 'tbd', c: 0, r: 0, t: 'Job moves\nPre-Dev → WIP', h: 'What triggers the reclass (who flips the phase, and when) is still open.' },
+        b: { s: 'cyl', k: 'mri', c: 0, r: 1, t: 'Read 1410 balance\njob · cost code' },
+        c: { s: 'dia', c: 0, r: 2, t: 'Balance\non 1410?' },
+        d: { s: 'oval', c: 1, r: 2, t: 'Nothing to move' },
+        e: { s: 'rect', c: 0, r: 3, t: 'Create JE 1410 → 1420\nunposted (Status U)', h: 'One balanced journal entry, job-coded, saved as an unposted draft. Nothing hits the books until accounting posts it.' },
+        f: { s: 'rect', c: 0, r: 4, t: 'Accounting reviews\nand posts in MRI' },
+        g: { s: 'oval', c: 0, r: 5, t: 'Done' } },
+      edges: [['a','b'], ['b','c'], ['c','d','No'], ['c','e','Yes'], ['e','f'], ['f','g']] }
+  ];
+
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+  function shape(g, s, x, y, cls) {
+    const [w, h] = SIZE[s], l = x - w / 2, t = y - h / 2;
+    if (s === 'oval') el('rect', { x: l, y: t, width: w, height: h, rx: h / 2, class: cls }, g);
+    else if (s === 'rect') el('rect', { x: l, y: t, width: w, height: h, rx: 4, class: cls }, g);
+    else if (s === 'dia') el('polygon', { points: `${x},${t} ${l + w},${y} ${x},${t + h} ${l},${y}`, class: cls }, g);
+    else if (s === 'para') el('polygon', { points: `${l + 12},${t} ${l + w},${t} ${l + w - 12},${t + h} ${l},${t + h}`, class: cls }, g);
+    else if (s === 'cyl') {
+      const ry = 6;
+      el('path', { d: `M${l},${t + ry} A${w / 2},${ry} 0 0 1 ${l + w},${t + ry} V${t + h - ry} A${w / 2},${ry} 0 0 1 ${l},${t + h - ry} Z`, class: cls }, g);
+      el('path', { d: `M${l},${t + ry} A${w / 2},${ry} 0 0 0 ${l + w},${t + ry}`, class: cls, style: 'fill:none' }, g);
+    }
+  }
+
+  function label(g, text, x, y) {
+    const lines = text.split('\n'), lh = 13.5;
+    const tx = el('text', { x, y: y - (lines.length - 1) * lh / 2 + 4 }, g);
+    lines.forEach((ln, i) => { const ts = el('tspan', { x, dy: i ? lh : 0 }, tx); ts.textContent = ln; });
+  }
+
+  function render(f) {
+    const card = document.createElement('div'); card.className = 'dec';
+    card.innerHTML = '<span class="dec-h">What happens to each record</span>';
+    const rows = Math.max(...Object.values(f.nodes).map(n => n.r)) + 1;
+    const H = ROW0 + (rows - 1) * ROWH + 40;
+    const svg = el('svg', { viewBox: `0 0 420 ${H}`, role: 'img', 'aria-label': `${f.title} decision flow` });
+    const id = 'ah' + String(f.title).replace(/\W/g, '');
+    el('path', { d: 'M0,0 L8,4 L0,8 Z', class: 'ah' }, el('marker', { id, viewBox: '0 0 8 8', refX: 8, refY: 4, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, el('defs', {}, svg)));
+    const pos = n => ({ x: COLX[n.c], y: ROW0 + n.r * ROWH, w: SIZE[n.s][0], h: SIZE[n.s][1] });
+
+    f.edges.forEach(([a, b, yn]) => {
+      const A = pos(f.nodes[a]), B = pos(f.nodes[b]);
+      let x1, y1, x2, y2, lx, ly;
+      if (A.x === B.x) { x1 = x2 = A.x; y1 = A.y + A.h / 2; y2 = B.y - B.h / 2; lx = A.x + 6; ly = y1 + 13; }
+      else { y1 = y2 = A.y; x1 = A.x + A.w / 2; x2 = B.x - B.w / 2; lx = x1 + 5; ly = A.y - 6; }
+      el('path', { d: `M${x1},${y1} L${x2},${y2}`, class: 'ed', 'marker-end': `url(#${id})` }, svg);
+      if (yn) { const t = el('text', { x: lx, y: ly, class: 'yn' }, svg); t.textContent = yn; }
+    });
+
+    Object.values(f.nodes).forEach(n => {
+      const p = pos(n), g = el('g', { class: 'n' }, svg);
+      const cls = ['nd', n.s === 'dia' ? 'dia' : n.s === 'oval' ? 'end' : n.s === 'para' ? 'out' : '', n.k || ''].join(' ');
+      shape(g, n.s, p.x, p.y, cls);
+      label(g, n.t, p.x, p.y);
+      el('title', {}, g).textContent = n.h || SHAPES[n.s][1];
+    });
+    card.appendChild(svg);
+    return card;
+  }
+
+  // Stages 1–5 get their chart inside the card, above the write-mode chip; the reclass chart goes under the trial steps.
+  const stages = document.querySelectorAll('.sec-flow .stage');
+  flows.forEach(f => {
+    const chart = render(f);
+    if (typeof f.no === 'number') { const st = stages[f.no - 1]; st.insertBefore(chart, st.querySelector('.phase-ribbon') || st.querySelector('.foot')); }
+    else document.querySelector('.sec-rc .steps').after(chart);
+  });
+
+  const lg = document.getElementById('dec-legend');
+  [...Object.entries(SHAPES), ['tbd', ['Dashed = not decided yet', 'This step or rule is still open.']]].forEach(([s, [name, tipText]]) => {
+    const sp = document.createElement('span'); sp.className = 'tip'; sp.title = tipText;
+    const svg = el('svg', { viewBox: '-90 -36 180 72' }, sp);
+    const g = el('g', {}, svg);
+    if (s === 'tbd') shape(g, 'rect', 0, 0, 'nd tbd');
+    else shape(g, s, 0, 0, ['nd', s === 'dia' ? 'dia' : s === 'oval' ? 'end' : s === 'para' ? 'out' : s === 'cyl' ? 'mri' : ''].join(' '));
+    sp.appendChild(document.createTextNode(name));
+    lg.appendChild(sp);
+  });
+})();
+</script>
+<script>
+// Real screens per stage: the source system's screen and the target's, with a box on each field. Hovering a
+// read/write/match row lights up the fields it names on both screens; hovering a box lights up its row.
+// Boxes are percentages of the image (left, top, width, height) so they hold at any width.
+// Images live in img/ next to this page and show UAT test data only.
+const SHOTS = {
+};
+
+(() => {
+  const stages = document.querySelectorAll('.sec-flow .stage');
+  Object.entries(SHOTS).forEach(([no, s]) => {
+    const st = stages[no - 1]; if (!st) return;
+    const rows = [...st.querySelectorAll('.io > span')];
+    const wrap = document.createElement('div'); wrap.className = 'shots';
+    const spotEls = {};
+    [s.from, s.to].forEach(shot => {
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<div class="frame"><img src="${shot.src}" alt="${shot.caption}" loading="lazy"></div><figcaption>${shot.caption}</figcaption>`;
+      const frame = fig.firstChild;
+      shot.spots.forEach(sp => {
+        const [l, t, w, h] = sp.box;
+        const b = document.createElement('span'); b.className = 'spot'; b.dataset.label = sp.label; b.title = sp.label;
+        Object.assign(b.style, { left: l + '%', top: t + '%', width: w + '%', height: h + '%' });
+        frame.appendChild(b); (spotEls[sp.id] = spotEls[sp.id] || []).push(b);
+      });
+      wrap.appendChild(fig);
+    });
+    st.insertBefore(wrap, st.querySelector('.dec') || st.querySelector('.foot'));
+
+    const clear = () => { wrap.classList.remove('focus'); st.querySelectorAll('.hot').forEach(e => e.classList.remove('hot')); };
+    const light = (rowIdx) => {
+      clear(); wrap.classList.add('focus');
+      rowIdx.forEach(i => { rows[i]?.classList.add('hot'); (s.rows[i] || []).forEach(id => (spotEls[id] || []).forEach(b => b.classList.add('hot'))); });
+    };
+    Object.keys(s.rows).forEach(i => {
+      const r = rows[i]; if (!r) return;
+      r.classList.add('linked');
+      r.addEventListener('mouseenter', () => light([+i])); r.addEventListener('mouseleave', clear);
+    });
+    Object.entries(spotEls).forEach(([id, els]) => els.forEach(b => {
+      const hits = Object.keys(s.rows).filter(i => s.rows[i].includes(id)).map(Number);
+      b.addEventListener('mouseenter', () => hits.length ? light(hits) : (clear(), wrap.classList.add('focus'), b.classList.add('hot')));
+      b.addEventListener('mouseleave', clear);
+    }));
+  });
+})();
+</script>
+<script>
+// Hover explanations. Keyed by the exact visible text, so each meaning is written once.
+(() => {
+  const LABELS = {
+    'SoT': 'Source of truth: the system whose data wins when the two disagree.',
+    'Often': 'How often this step runs.',
+    'When': 'What triggers this step, or which step it runs after.',
+    'Lag': 'Longest wait before a change shows up in the other system.',
+    'Options': 'Per-client choices that change how this step behaves.',
+    'Built by': 'Who builds and maintains this connection.',
+    'phase': 'Part 1 of the Autodesk code: the MRI phase, which steers which GL account the cost posts to.',
+    'major': 'Part 2 of the Autodesk code: the first half of the MRI cost code.',
+    'minor': 'Part 3 of the Autodesk code: the second half of the MRI cost code.',
+    'cost code': 'Parts 2 and 3 joined with a dash: the MRI cost code.',
+    'category': 'Part 4 of the Autodesk code: the MRI cost code category.',
+    'GL acct': 'GL account, looked up in PMJC_Map by phase + cost code.'
+  };
+  const VALUES = {
+    'TBD': 'Not decided yet.',
+    '—': 'None.',
+    'default country for vendors with none': 'If an MRI vendor has no country, Autodesk gets this country instead (Dimension setting integration.vendor.default_country).',
+    'new codes reported and held for customer review': 'Cost codes in Autodesk that don\u2019t exist in MRI are not created automatically. They\u2019re listed in the run log for someone at the customer to approve.',
+    'budget type (default STD); codes not in MRI skipped and reported': 'Budget lines are written to this MRI budget type (Dimension setting integration.budget_type; STD = standard). A budget whose cost code isn\u2019t in MRI is skipped and listed in the run log.',
+    'AP system schedule; the customer can change': 'The AP system runs this on its own timer. The interval shown is the AP vendor\u2019s standard; the customer can ask for a different one.',
+    'up to 1 hr': 'A change made just after a run waits for the next run, up to an hour.',
+    'up to 15 min': 'A change made just after a run waits for the next run, up to 15 minutes.',
+    'hourly': 'Runs once an hour.',
+    'every 15 min': 'Runs every 15 minutes.',
+    'first; before projects': 'Runs first, so vendors exist before anything refers to them.',
+    'after companies': 'Runs after companies are synced.',
+    'before budgets': 'Runs before budgets, because a budget line needs its cost code to exist in MRI.',
+    'after cost codes': 'Runs after cost codes, so every budget line has a cost code to land on.',
+    'after budgets': 'Runs after budgets, so commitments have budget lines to land on.',
+    'after pre-coding in Autodesk': 'Once the invoice has been coded to a job and cost code in Autodesk.',
+    'after approval in the AP system': 'Once the invoice is approved in the AP system.',
+    'Create + Update': 'Creates missing records and updates existing ones that differ.',
+    'Create only · do not update': 'Creates missing records. Never changes a record that already exists, even if it differs.',
+    'Read · hourly': 'The AP system only reads from MRI; it doesn\u2019t change MRI data.',
+    'Read · 15 min': 'The AP system only reads from MRI; it doesn\u2019t change MRI data.',
+    'Write · 15 min': 'The AP system writes approved invoices into MRI.',
+    'Owner + field spec open': 'Nobody is assigned to build this yet, and we don\u2019t have the AP vendor\u2019s list of invoice fields.',
+    'ACC': 'Autodesk Construction Cloud.',
+    'MRI': 'MRI X, the customer\u2019s accounting system.',
+    'AP system': 'The customer’s AP invoice-approval system.',
+    'const': 'The same fixed value on every line.',
+    'context': 'Comes from the job being synced, not from the Autodesk budget line.',
+    'GL': 'General ledger account the cost posts to.',
+    '⚑ GL reclass': 'Moving a job from Pre-Dev to WIP is done with a journal entry that reclassifies its costs.',
+    '⚑ phase': 'Phase changes reach the AP system on its next read.'
+  };
+  const IO = {
+    'read': 'Where this step gets its data.',
+    'write': 'Where this step puts the data.',
+    'match': 'How a record in one system is paired with the same record in the other.',
+    'if': 'Fallback pairing used when the main match finds nothing.',
+    'and': 'Also has to match.',
+    'split': 'The Autodesk code is cut on its dashes into the parts below.'
+  };
+  const tip = (el, text) => { if (text) { el.title = text; el.classList.add('tip'); } };
+  const txt = el => el.textContent.trim();
+  document.querySelectorAll('.lab').forEach(el => tip(el, LABELS[txt(el)]));
+  document.querySelectorAll('.val, .trig, .sys, .tag, .flag').forEach(el => tip(el, VALUES[txt(el)]));
+  document.querySelectorAll('.io > span').forEach(el => tip(el, IO[txt(el).split(/[\s:]/)[0]]));
+  document.querySelectorAll('code').forEach(el => {
+    if (txt(el).includes('PMJC_Map')) tip(el, 'MRI\u2019s interface chart: maps a job\u2019s phase + cost code to the GL account, entity and cost list.');
+  });
+  document.querySelectorAll('.row.key').forEach(el => tip(el, 'Used to look up the matching row.'));
+})();
+</script>
+</body>
+</html>
